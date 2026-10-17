@@ -1,0 +1,7 @@
+# Game binaries: never commit the original or patched POP2.EXE
+*.exe
+*.EXE
+
+# Python
+__pycache__/
+*.pyc
