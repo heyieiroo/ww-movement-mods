@@ -6,6 +6,8 @@ Changes:
   * Wall-run addon: hold the wall-run button (right mouse by default) while jumping or
     rebounding into a wall at an angle (not head-on) to start a horizontal wall run
     from mid-air. Keep holding it to chain runs.
+  * Stairs-jump fix: a normal jump can no longer land before its apex. Fixes the instant
+    landing when jumping up a slope or stairs near an edge (also present in vanilla).
 
 Usage: python pop2_movement_patch.py <path to original POP2.EXE> [output path]
 
@@ -18,7 +20,7 @@ import sys
 from pathlib import Path
 
 ORIGINAL_SHA256 = "5559117d013155bbad608cedc2fd0dd272f37ed92c936fc4e151287f3b5ff1cb"
-PATCHED_SHA256 = "7c65edf1b541b2cdbbb0517fd47de2735f3c4c722c102a505ed62d9dd7abd60d"
+PATCHED_SHA256 = "28ec8372bc2d167e67f449106deb708b9d63e84554bdf4b6978c540ea8b769a6"
 
 # Code caves. Addresses in comments are virtual addresses; file offset = VA - 0x400000.
 JUMP_CAVE = bytes.fromhex(
@@ -69,6 +71,15 @@ WALLRUN_CAVE = bytes.fromhex(
     "66 90 00 00 20 C1"
 )
 
+STAIRSJUMP_CAVE = bytes.fromhex(
+    # mov [esi+0x578],ecx   (replayed hook: launch time)
+    "89 8E 78 05 00 00"
+    # mov dword [esi+0x4CC],0   (clear the falling flag, as the rebound launch does)
+    "C7 86 CC 04 00 00 00 00 00 00"
+    # jmp 0x64F06E   (mov/jmp only: the je there still sees the flags of cmp eax,ebp)
+    "E9 99 4D D9 FF"
+)
+
 # (file offset, original bytes, new bytes)
 PATCHES = [
     # Jump addon: 0x4DD331 roll block entry -> jmp to the jump cave
@@ -87,6 +98,12 @@ PATCHES = [
      bytes.fromhex("E9 7C D2 26 00 90 90 90 90 90 90")),
     # Wall-run addon: cave in the .text slack at 0x8BA130
     (0x4BA130, bytes(len(WALLRUN_CAVE)), WALLRUN_CAVE),
+    # Stairs-jump fix: 0x64F068 take-off handler, launch-time store -> jmp to the cave
+    (0x24F068,
+     bytes.fromhex("89 8E 78 05 00 00"),
+     bytes.fromhex("E9 53 B2 26 00 90")),
+    # Stairs-jump fix: cave in the .text slack at 0x8BA2C0, after the wall-run cave
+    (0x4BA2C0, bytes(len(STAIRSJUMP_CAVE)), STAIRSJUMP_CAVE),
 ]
 
 
