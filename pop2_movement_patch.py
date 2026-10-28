@@ -10,6 +10,10 @@ Changes:
     from mid-air. Keep holding it to chain runs.
   * Stairs-jump fix: a normal jump can no longer land before its apex. Fixes the instant
     landing when jumping up a slope or stairs near an edge (also present in vanilla).
+  * Story-trigger fix: the game refuses story triggers while the Prince is in a jump, so
+    jumping through or over one could skip story progress (also present in vanilla). Such a
+    trigger now fires when he lands, as if he had walked through it. Jumping over counts down
+    to the take-off height. Only story triggers are affected.
 
 Usage: python pop2_movement_patch.py <path to original POP2.EXE> [output path]
 
@@ -22,7 +26,7 @@ import sys
 from pathlib import Path
 
 ORIGINAL_SHA256 = "5559117d013155bbad608cedc2fd0dd272f37ed92c936fc4e151287f3b5ff1cb"
-PATCHED_SHA256 = "88193b3d610c10c8ebe33a5cfb25fd27c59c2f27d6a6b81a92ecb676a817f926"
+PATCHED_SHA256 = "f9b40d56f5828243a0ab15cfee02bf873a8f20198f2fae8bdc1fcccc3c3073c9"
 
 # sha256 -> description of builds produced by earlier versions of this script
 KNOWN_OLDER_BUILDS = {
@@ -30,6 +34,8 @@ KNOWN_OLDER_BUILDS = {
     "7c65edf1b541b2cdbbb0517fd47de2735f3c4c722c102a505ed62d9dd7abd60d": "jump + wall-run addons",
     "28ec8372bc2d167e67f449106deb708b9d63e84554bdf4b6978c540ea8b769a6":
         "jump + wall-run addons + stairs-jump fix",
+    "88193b3d610c10c8ebe33a5cfb25fd27c59c2f27d6a6b81a92ecb676a817f926":
+        "jump key + wall-run addon + stairs-jump fix",
 }
 
 # Code caves. Addresses in comments are virtual addresses; file offset = VA - 0x400000.
@@ -81,13 +87,40 @@ WALLRUN_CAVE = bytes.fromhex(
     "66 90 00 00 20 C1"
 )
 
-STAIRSJUMP_CAVE = bytes.fromhex(
+# Stairs-jump fix: normal jumps keep a stale falling flag [vars+0x4CC] = 1, so any ground contact
+# lands them, even right after take-off. The flag itself stays vanilla (clearing it moves the
+# fall-start height [vars+0x204] to the apex and adds the jump rise to fall damage). Instead,
+# PENDING (dword at 0xDBFCEC in the .data tail) holds the Prince data from take-off until the
+# vertical velocity is <= 0, and the landing gate refuses to land while it is set.
+STAIRSJUMP_CAVE = bytes.fromhex(  # at 0x8BA2C0, jumped to from the take-off handler 0x64F068
     # mov [esi+0x578],ecx   (replayed hook: launch time)
     "89 8E 78 05 00 00"
-    # mov dword [esi+0x4CC],0   (clear the falling flag, as the rebound launch does)
-    "C7 86 CC 04 00 00 00 00 00 00"
+    # mov [PENDING],esi   (apex not reached yet)
+    "89 35 EC FC DB 00"
     # jmp 0x64F06E   (mov/jmp only: the je there still sees the flags of cmp eax,ebp)
-    "E9 99 4D D9 FF"
+    "E9 9D 4D D9 FF"
+)
+
+STAIRSJUMP_APEX_CAVE = bytes.fromhex(  # at 0x8BA570, jumped to from the airborne handler 0x64C819
+    # cmp [PENDING],esi ; jne vanilla
+    "39 35 EC FC DB 00 75 2D"
+    # sub esp,0xC ; 0x4A7980([0xD34A48], esp) velocity
+    "83 EC 0C 54 FF 35 48 4A D3 00 E8 F9 D3 BE FF 83 C4 08"
+    # v.z > 0 (rising) or NaN -> keep ; else PENDING = 0   (same test as the vanilla falling flag)
+    "D9 EE D9 44 24 08 DF F1 DD D8 7A 0C 77 0A C7 05 EC FC DB 00 00 00 00 00"
+    # add esp,0xC
+    "83 C4 0C"
+    # vanilla: cmp [esi+0x4CC],ebx ; jne 0x64C884 ; jmp 0x64C821   (replayed hook)
+    "39 9E CC 04 00 00 0F 85 D3 22 D9 FF E9 6B 22 D9 FF"
+)
+
+STAIRSJUMP_GATE_CAVE = bytes.fromhex(  # at 0x8BA5C0, jumped to from the landing gate 0x64CDB5
+    # cmp [esi+0x4CC],ebx ; je 0x64CDC1   (replayed: falling flag clear -> no landing)
+    "39 9E CC 04 00 00 0F 84 F5 27 D9 FF"
+    # cmp [PENDING],esi ; je 0x64CDC1   (before the apex -> no landing)
+    "39 35 EC FC DB 00 0F 84 E9 27 D9 FF"
+    # jmp 0x64DCC8   (landing)
+    "E9 EB 36 D9 FF"
 )
 
 # Jump key: new action 0x10. Controls-menu order (24 vanilla entries at 0x8BC244 + 0x10 after
@@ -130,6 +163,62 @@ JUMPKEY_PAD_CAVE = bytes.fromhex(  # at 0x8BA380, hooked from the pad builder af
     "59 A1 E4 F0 93 00 E9 3B 37 B6 FF"
 )
 
+# Story-trigger fix: replaces the trigger manager's point test 0x49DE40(vol, actor) (cdecl).
+# Story gates (type 5/0xD) refuse the Prince in movement mode 4 (jump) / 0x15. A gate touched in
+# those modes (or jumped over: points below him down to take-off z) is latched, and reported as
+# inside for HOLD manager runs once he leaves them, so it gets a fresh enter on the ground.
+# Latch variables in the .data tail: LATCH_VOL 0xDBFCE0, LATCH_T 0xDBFCE4 (float), LATCH_HOLD 0xDBFCE8.
+STORYTRIGGER_CAVE = bytes.fromhex(  # at 0x8BA3C0, called from 0x5CF620
+    # push ebx/esi/edi/ebp ; esi = vol ; edi = actor
+    "53 56 57 55 8B 74 24 14 8B 7C 24 18"
+    # ebp = r = 0x49DE40(vol, actor)   (vanilla result, returned on every path but the hold)
+    "57 56 E8 6D 3A BE FF 83 C4 08 89 C5"
+    # actor != Prince [0xD0C414] -> ret_r
+    "3B 3D 14 C4 D0 00 0F 85 9A 00 00 00"
+    # vol or actor without flag bit 0 -> ret_r   (same gates as 0x7B0CA0)
+    "F6 46 04 01 0F 84 90 00 00 00 F6 47 04 01 0F 84 86 00 00 00"
+    # trigger type [[[vol+0x18]+4]+0x48]+0xD0 not 5/0xD (story gate) -> ret_r
+    "8B 46 18 8B 40 04 8B 40 48 8B 80 D0 00 00 00 83 F8 05 74 05 83 F8 0D 75 6D"
+    # ebx = Prince data ; mode [ebx+0x644] 4 or 0x15 -> in_jump
+    "8B 5F 18 8B 5B 04 8B 5B 48 8B 83 44 06 00 00 83 F8 04 74 60 83 F8 15 74 5B"
+    # vol != LATCH_VOL -> ret_r ; r != 0 -> clear   (inside anyway: vanilla handles it)
+    "3B 35 E0 FC DB 00 75 4C 85 ED 75 3E"
+    # dt = now ([0x940974] - [0xCD3318]) - LATCH_T ; dt < 0 or NaN -> expire_pop
+    "D9 05 74 09 94 00 D8 25 18 33 CD 00 D8 25 E4 FC DB 00 D9 EE DF F1 77 24 7A 22"
+    # dt > TMAX -> clear
+    "D9 05 68 A5 8B 00 DF F1 DD D8 72 18"
+    # LATCH_HOLD == 0 -> clear ; LATCH_HOLD-- ; eax = 1 (inside) ; jmp done
+    "83 3D E8 FC DB 00 00 74 0F FF 0D E8 FC DB 00 B8 01 00 00 00 EB 0E"
+    # expire_pop: fstp st0 ; clear: LATCH_VOL = 0 ; ret_r: eax = r ; done: pop ebp/edi/esi/ebx ; ret
+    "DD D8 C7 05 E0 FC DB 00 00 00 00 00 89 E8 5D 5F 5E 5B C3"
+    # in_jump: r != 0 -> latch   (inside mid-air, refused by the gate)
+    "85 ED 0F 85 A9 00 00 00"
+    # state [ebx+0x640] not 0x412 (jump) / 0x413 (rebound) -> ret_r
+    "8B 83 40 06 00 00 3D 12 04 00 00 74 07 3D 13 04 00 00 75 DD"
+    # 0x49F5D0(prince, 0x40) ground contact this frame -> ret_r
+    "6A 40 57 E8 27 51 BE FF 83 C4 08 85 C0 75 CE"
+    # sub esp,0x10 (p = [esp], bottom = [esp+0xC]) ; p = Prince translation [[edi+0xC]+0x30]
+    "83 EC 10 8B 47 0C 8B 48 30 89 0C 24 8B 48 34 89 4C 24 04 D9 40 38 D9 54 24 08"
+    # bottom = max(take-off z [ebx+0x8E4], z - DMAX)
+    "D8 25 64 A5 8B 00 D9 83 E4 08 00 00 DB F1 73 02 D9 C9 D9 5C 24 0C DD D8"
+    # z <= bottom (or NaN) -> no_hit
+    "D9 44 24 0C D9 44 24 08 DF F1 DD D8 76 37"
+    # next: p.z -= STEP, or p.z = bottom as the last sample (ebp = 1)
+    "D9 44 24 08 D8 25 60 A5 8B 00 D9 44 24 0C DB F1 72 09"
+    "DD D9 BD 01 00 00 00 EB 04 DD D8 31 ED D9 5C 24 08"
+    # 0x7AF870(vol, &p) point in bounding volume ; hit -> hit ; not last -> next
+    "89 E0 50 56 E8 54 53 EF FF 83 C4 08 85 C0 75 0E 85 ED 74 C9"
+    # no_hit: add esp,0x10 ; r = 0 ; jmp ret_r
+    "83 C4 10 31 ED E9 4D FF FF FF"
+    # hit: add esp,0x10 ; r = 0   (the mid-air result stays vanilla)
+    "83 C4 10 31 ED"
+    # latch: LATCH_VOL = vol ; LATCH_T = now ; LATCH_HOLD = 10 ; jmp ret_r
+    "89 35 E0 FC DB 00 D9 05 74 09 94 00 D8 25 18 33 CD 00 D9 1D E4 FC DB 00"
+    "C7 05 E8 FC DB 00 0A 00 00 00 E9 21 FF FF FF"
+    # padding ; STEP = 0.25f at VA 0x8BA560 ; DMAX = 3.0f at 0x8BA564 ; TMAX = 10.0f at 0x8BA568
+    "8D 76 00 00 00 80 3E 00 00 40 40 00 00 20 41"
+)
+
 # (file offset, original bytes, new bytes)
 PATCHES = [
     # Jump key: 0x4DD331 roll block entry -> jmp to the jump cave
@@ -154,6 +243,17 @@ PATCHES = [
      bytes.fromhex("E9 53 B2 26 00 90")),
     # Stairs-jump fix: cave in the .text slack at 0x8BA2C0, after the wall-run cave
     (0x4BA2C0, bytes(len(STAIRSJUMP_CAVE)), STAIRSJUMP_CAVE),
+    # Stairs-jump fix: 0x64C819 airborne apex check -> jmp to the apex cave
+    (0x24C819,
+     bytes.fromhex("39 9E CC 04 00 00 75 63"),
+     bytes.fromhex("E9 52 DD 26 00 90 90 90")),
+    # Stairs-jump fix: 0x64CDB5 landing gate -> jmp to the gate cave
+    (0x24CDB5,
+     bytes.fromhex("39 9E CC 04 00 00 0F 85 07 0F 00 00"),
+     bytes.fromhex("E9 06 D8 26 00 90 90 90 90 90 90 90")),
+    # Stairs-jump fix: apex and gate caves in the .text slack after the story-trigger cave
+    (0x4BA570, bytes(len(STAIRSJUMP_APEX_CAVE)), STAIRSJUMP_APEX_CAVE),
+    (0x4BA5C0, bytes(len(STAIRSJUMP_GATE_CAVE)), STAIRSJUMP_GATE_CAVE),
     # Jump key: the 4 readers of the Controls-menu order array 0x8BC244 -> 0x8BA2E0
     (0x5A54, bytes.fromhex("8A 8C 30 44 C2 8B 00"), bytes.fromhex("8A 8C 30 E0 A2 8B 00")),
     (0x64D7, bytes.fromhex("0F B6 8C 38 44 C2 8B 00"), bytes.fromhex("0F B6 8C 38 E0 A2 8B 00")),
@@ -172,6 +272,16 @@ PATCHES = [
     (0x4BA310, bytes(len(JUMPKEY_LABEL_CAVE)), JUMPKEY_LABEL_CAVE),
     (0x4BA350, bytes(len(JUMPKEY_DEFAULTS_CAVE)), JUMPKEY_DEFAULTS_CAVE),
     (0x4BA380, bytes(len(JUMPKEY_PAD_CAVE)), JUMPKEY_PAD_CAVE),
+    # Story-trigger fix: 0x5CF620 trigger manager point test -> call the story-trigger cave
+    (0x1CF620, bytes.fromhex("E8 1B E8 EC FF"), bytes.fromhex("E8 9B AD 2E 00")),
+    # Story-trigger fix: cave in the .text slack at 0x8BA3C0, after the Jump-key caves
+    (0x4BA3C0, bytes(len(STORYTRIGGER_CAVE)), STORYTRIGGER_CAVE),
+    # Story-trigger and stairs-jump fixes: PE header, .data VirtualSize 0x4AECD8 -> 0x4AED00 (maps
+    # the latch variables at 0xDBFCE0..0xDBFCEB and PENDING at 0xDBFCEC, zero-filled, inside the
+    # section's last page)
+    (0x1D0,
+     bytes.fromhex("D8 EC 4A 00"),
+     bytes.fromhex("00 ED 4A 00")),
 ]
 
 

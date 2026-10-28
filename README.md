@@ -4,18 +4,16 @@ Movement mods for **Prince of Persia: Warrior Within** (Steam, 2004), applied as
 `POP2.EXE`. This repository contains only the patcher script; no game files are included or
 distributed. You need your own Steam copy of the game.
 
-## What it changes
+## Features
 
 - **Jump key.** A new "Jump" action in *Options > Controls*, listed after Roll/Jump, default **V**.
-  It acts like Space everywhere, except that direction + Jump is a forward jump instead of a roll.
-  Space itself is unchanged (direction + Space still rolls). The key can be rebound like any other
-  action (gamepad binding is untested). Existing profiles start with the new action unbound: bind
-  it in the menu or choose *Default settings*.
-- **Wall-run addon.** Hold the wall-run button (right mouse by default) while jumping or
-  rebounding into a wall at an angle (not head-on) to start a horizontal wall run from mid-air.
-  Keep holding it to chain runs.
-- **Stairs-jump fix.** A normal jump can no longer land before its apex. This fixes the instant
-  landing when jumping up a slope or stairs near an edge, a bug also present in the original game.
+  It acts like Space everywhere, except that Direction + Jump is a forward jump instead of a roll.
+  Space itself is unchanged (Direction + Space still rolls). The key can be rebound like any other
+  action. Remember to rebind it in the menu if the profile isn't new.
+- **Wall-run addon.** You can now also start wallruns by jumping into a wall. Hold the wall-run 
+  button while jumping or rebounding into a wall at an angle (not head-on) to start a horizontal 
+  wall run from mid-air.
+- **Story-trigger fix.** Made story triggers less likely to be skipped by jumping over them.
 
 ## Requirements
 
@@ -37,7 +35,7 @@ distributed. You need your own Steam copy of the game.
 
 The script refuses any input that is not the original Steam exe, checks every byte before changing
 it, and verifies the sha256 of the result
-(`88193b3d610c10c8ebe33a5cfb25fd27c59c2f27d6a6b81a92ecb676a817f926`).
+(`f9b40d56f5828243a0ab15cfee02bf873a8f20198f2fae8bdc1fcccc3c3073c9`).
 If you previously applied an older version of these mods, restore the original exe first (from your
 backup, or *Steam > Properties > Installed Files > Verify integrity*).
 
