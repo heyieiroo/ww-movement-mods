@@ -6,19 +6,19 @@ distributed. You need your own Steam copy of the game.
 
 ## Features
 
-### Jump key
+### Special Jump key
 
 <p align="center">
-  <img src="media/jump.gif" width="560" alt="The Prince jumping with the new Jump key">
+  <img src="media/jump.gif" width="560" alt="The Prince jumping with the new Special Jump key">
 </p>
 
-A new "Jump" action in *Options > Controls*, listed after Roll/Jump, default **V**. It acts like
-Space everywhere, except that Direction + Jump is a forward jump instead of a roll. Space itself is
-unchanged (Direction + Space still rolls). The key can be rebound like any other action. Remember
-to rebind it in the menu if the profile isn't new.
+A new "Special Jump" action in *Options > Controls*, listed after Roll/Jump, default **V**. It acts
+like Space everywhere, except that Direction + Special Jump is a forward jump instead of a roll. 
+Space itself is unchanged (Direction + Space still rolls). The key can be rebound like any other
+action. Remember to rebind it in the menu if the profile isn't new.
 
 <p align="center">
-  <img src="media/jump-keybind.png" width="560" alt="The keyboard controls menu with the new Jump action bound to V">
+  <img src="media/jump-keybind.png" width="560" alt="The keyboard controls menu with the new Special Jump action bound to V">
 </p>
 
 ### Wall runs from jumps
@@ -40,12 +40,28 @@ You can now also start wallruns by jumping into a wall. Hold the wallrun button 
 rebounding into a wall, and keep holding it to chain wallruns without pressing it again. Vertical
 wallruns are optional; the patcher asks whether to include them.
 
-### Angled wall jump
+### Diagonal wall jump and torpedo
 
-While wallrunning horizontally, jump off with the Jump key (**V**) to leap at 45 degrees toward the
-direction you are running, instead of straight out from the wall. Space still jumps straight out.
-Together with wallruns from jumps, this lets you chain into a wallrun on the next wall, for example
-around a corner.
+<div align="center">
+  <table>
+    <tr>
+      <th>Diagonal jump</th>
+      <th>Diagonal torpedo</th>
+    </tr>
+    <tr>
+      <td><img src="media/diagonal-walljump.gif" width="100%" alt="A diagonal jump off a horizontal wall run"></td>
+      <td><img src="media/diagonal-torpedo.gif" width="100%" alt="A diagonal torpedo attack off a horizontal wall run"></td>
+    </tr>
+  </table>
+</div>
+
+While wallrunning horizontally, jump off with the Special Jump key (**V**) to leap at 45 degrees
+toward the direction you are running, instead of straight out from the wall. **Space still jumps 
+straight out**. Together with wallruns from jumps, this lets you chain into a wallrun on the next 
+wall, for example around a corner.
+
+Press the Special Jump key together with the primary attack (**V + Left click**) to launch the 
+torpedo attack along the same diagonal instead, with or without an enemy nearby.
 
 ### Story-trigger fix
 
@@ -77,8 +93,8 @@ it, and verifies the sha256 of the result:
 
 | Version | sha256 |
 |---|---|
-| With vertical wall runs (default) | `d938ffb98c67a49d30a41130a876b7fedda2eaf5e9dee9570cbe945fe54b025a` |
-| Horizontal wall runs only | `3245e9119059103d989e168dd98ee4ef9c065914c3f6f87547ff751b28c6a412` |
+| With vertical wall runs (default) | `76ee11cd70499db89c50a4f02408eb1996dc53043c36d1b78e3955682397f93e` |
+| Horizontal wall runs only | `2f097c8673f50b7ad65db7596c67d3664e67a5ed505a44ec779186c6ec3550ae` |
 
 If you previously applied an older version of these mods, restore the original exe first (from your
 backup, or *Steam > Properties > Installed Files > Verify integrity*).

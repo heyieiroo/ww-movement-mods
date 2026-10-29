@@ -1,8 +1,9 @@
 """Prince of Persia: Warrior Within (Steam, POP2.EXE) movement patch.
 
 Changes:
-  * Jump key: a new "Jump" action in the Controls menu (after Roll/Jump, default V).
-    It acts as Space everywhere, but direction + Jump is a forward jump instead of a roll.
+  * Special Jump key: a new "Special Jump" action in the Controls menu (after Roll/Jump,
+    default V). It acts as Space everywhere, but direction + Special Jump is a forward jump
+    instead of a roll.
     Space is vanilla again (direction + Space = roll). Existing profiles start with the
     new action unbound: bind it in the menu or use Default settings.
   * Wall-run addon: hold the wall-run button (right mouse by default) while jumping or
@@ -15,8 +16,10 @@ Changes:
     jumping through or over one could skip story progress (also present in vanilla). Such a
     trigger now fires when he lands, as if he had walked through it. Jumping over counts down
     to the take-off height. Only story triggers are affected.
-  * Angled wall jump: jump off a horizontal wall run with the Jump key (V by default) to leap
-    45 degrees toward the running direction. Space still jumps straight out from the wall.
+  * Angled wall jump: jump off a horizontal wall run with the Special Jump key (V by default)
+    to leap 45 degrees toward the running direction. Space still jumps straight out.
+  * Wall torpedo: jump off a horizontal wall run with Special Jump + primary attack (V + left
+    click by default) to dive at 45 degrees in the torpedo attack, with or without an enemy.
 
 Usage: python pop2_movement_patch.py <path to original POP2.EXE> [output file or folder]
            [--vertical-wallruns | --no-vertical-wallruns]
@@ -33,8 +36,8 @@ from pathlib import Path
 
 ORIGINAL_SHA256 = "5559117d013155bbad608cedc2fd0dd272f37ed92c936fc4e151287f3b5ff1cb"
 # sha256 of the output with and without vertical wall runs from jumps
-PATCHED_SHA256_VERTICAL = "d938ffb98c67a49d30a41130a876b7fedda2eaf5e9dee9570cbe945fe54b025a"
-PATCHED_SHA256_HORIZONTAL = "3245e9119059103d989e168dd98ee4ef9c065914c3f6f87547ff751b28c6a412"
+PATCHED_SHA256_VERTICAL = "e13659e0fecebc8d4d259be90f2271515bd63e82b9dad34696fb732c49475587"
+PATCHED_SHA256_HORIZONTAL = "968fd715b305148ec8c634d8ebfbdb20a241529b985e61259a84530e0374c5bc"
 
 # sha256 -> description of builds produced by earlier versions of this script
 KNOWN_OLDER_BUILDS = {
@@ -48,6 +51,11 @@ KNOWN_OLDER_BUILDS = {
         "jump key + wall-run addon with vertical runs + stairs-jump and story-trigger fixes",
     "f9b40d56f5828243a0ab15cfee02bf873a8f20198f2fae8bdc1fcccc3c3073c9":
         "jump key + wall-run addon + stairs-jump and story-trigger fixes",
+    "d938ffb98c67a49d30a41130a876b7fedda2eaf5e9dee9570cbe945fe54b025a":
+        "jump key + wall-run addon with vertical runs + angled wall jump + stairs-jump and "
+        "story-trigger fixes",
+    "3245e9119059103d989e168dd98ee4ef9c065914c3f6f87547ff751b28c6a412":
+        "jump key + wall-run addon + angled wall jump + stairs-jump and story-trigger fixes",
 }
 
 # Code caves. Addresses in comments are virtual addresses; file offset = VA - 0x400000.
@@ -141,14 +149,14 @@ STAIRSJUMP_GATE_CAVE = bytes.fromhex(  # at 0x8BA5C0, jumped to from the landing
 JUMPKEY_ORDER = bytes.fromhex(
     "27 25 28 26 2D 00 10 07 02 03 01 06 05 04 0A 08 09 2B 2C 29 2A 0C 0E 0F 0D")
 
-JUMPKEY_LABEL = b"Jump\0"  # at 0x8BA300
+JUMPKEY_LABEL = b"Special Jump\0"  # at 0x8BA300 (room for 15 characters before the label cave)
 
 JUMPKEY_LABEL_CAVE = bytes.fromhex(  # at 0x8BA310, hooked from text lookup 0x418050(&group,&key)
     # eax = key c_str   (MSVC 7.1 std::string: +4 inline buffer or pointer, +0x18 capacity)
     "8B 44 24 08 83 78 18 10 72 05 8B 40 04 EB 03 83 C0 04"
     # key == "Action_16" ? (cmp "Acti", "on_1", "6\0") ; else -> orig
     "81 38 41 63 74 69 75 19 81 78 04 6F 6E 5F 31 75 10 66 81 78 08 36 00 75 08"
-    # mov eax, 0x8BA300 ("Jump") ; ret 8
+    # mov eax, 0x8BA300 (JUMPKEY_LABEL) ; ret 8
     "B8 00 A3 8B 00 C2 08 00"
     # orig: mov eax,[esp+4] ; push esi ; mov esi,ecx ; jmp 0x418057   (replayed entry)
     "8B 44 24 04 56 8B F1 E9 08 DD B5 FF"
@@ -237,29 +245,33 @@ STORYTRIGGER_CAVE = bytes.fromhex(  # at 0x8BA3C0, called from 0x5CF620
 # When the Jump key triggered it, the facing is turned 45 degrees toward the wall first,
 # f' = cos45*f - sin45*n (n = wall normal [vars+0x61C], stored by the wall-run handler this
 # frame), so the leap turns 45 degrees from straight out toward the run direction.
+# Every jump-off also stores whether it was a Jump-key jump-off in V_JUMPOFF (byte at 0xDBFCF0),
+# for the wall torpedo below: its attack check runs when the push-off animation ends, when a
+# quick V tap may already be released (and pad bit 16 has no press-time slot).
 WALLJUMP_ANGLE_CAVE = bytes.fromhex(  # at 0x8BA5E0, jumped to from the jump-off 0x591019
-    # test byte [0x93F062], 1 ; 3x nop ; jne angled   (pad bit 16 = Jump key held, set by
-    # PAD_CAVE together with the Space bit, so Space alone keeps the vanilla jump-off)
-    "F6 05 62 F0 93 00 01 90 90 90 75 0B"
+    # mov al,[0x93F062] ; and al,1 ; mov [0xDBFCF0],al ; jne angled   (pad bit 16 = Jump key
+    # held, set by PAD_CAVE together with the Space bit, so Space alone keeps the vanilla
+    # jump-off; eax is free here, 0x59101F pushes and then calls)
+    "A0 62 F0 93 00 24 01 A2 F0 FC DB 00 75 0B"
     # mov edx,[0xD34A48] ; jmp 0x59101F   (replayed hook: vanilla jump-off)
-    "8B 15 48 4A D3 00 E9 28 6A CD FF"
+    "8B 15 48 4A D3 00 E9 26 6A CD FF"
     # angled: pushad ; sub esp,0x18 ; mov ebx,esp   (f = [ebx], f' = [ebx+0xC])
     "60 83 EC 18 89 E3"
     # 0x490850(obj,&f)   facing
-    "53 FF 35 48 4A D3 00 E8 47 62 BD FF 83 C4 08"
+    "53 FF 35 48 4A D3 00 E8 45 62 BD FF 83 C4 08"
     # f'.x = COS45*f.x - SIN45*n.x
-    "D9 05 88 A6 8B 00 D8 8E 1C 06 00 00 D9 5B 0C"
-    "D9 05 84 A6 8B 00 D8 0B D8 63 0C D9 5B 0C"
+    "D9 05 8A A6 8B 00 D8 8E 1C 06 00 00 D9 5B 0C"
+    "D9 05 86 A6 8B 00 D8 0B D8 63 0C D9 5B 0C"
     # f'.y = COS45*f.y - SIN45*n.y
-    "D9 05 88 A6 8B 00 D8 8E 20 06 00 00 D9 5B 10"
-    "D9 05 84 A6 8B 00 D8 4B 04 D8 63 10 D9 5B 10"
+    "D9 05 8A A6 8B 00 D8 8E 20 06 00 00 D9 5B 10"
+    "D9 05 86 A6 8B 00 D8 4B 04 D8 63 10 D9 5B 10"
     # f'.z = 0 ; 0x47C620(&f') flatten + normalize
-    "C7 43 14 00 00 00 00 8D 43 0C 50 E8 C9 1F BC FF 83 C4 04"
+    "C7 43 14 00 00 00 00 8D 43 0C 50 E8 C7 1F BC FF 83 C4 04"
     # up = (0,0,1) on the stack ; 0x4902A0(obj,&f',&up)   set facing
-    "68 00 00 80 3F 6A 00 6A 00 89 E0 50 8D 43 0C 50 FF 35 48 4A D3 00 E8 2B 5C BD FF"
+    "68 00 00 80 3F 6A 00 6A 00 89 E0 50 8D 43 0C 50 FF 35 48 4A D3 00 E8 29 5C BD FF"
     # add esp,0x30 ; popad ; mov edx,[0xD34A48] ; jmp 0x59101F   (replayed hook, new facing)
-    "83 C4 30 61 8B 15 48 4A D3 00 E9 9B 69 CD FF"
-    # COS45 = 0.707107f at VA 0x8BA684 ; SIN45 = 0.707107f at 0x8BA688
+    "83 C4 30 61 8B 15 48 4A D3 00 E9 99 69 CD FF"
+    # COS45 = 0.707107f at VA 0x8BA686 ; SIN45 = 0.707107f at 0x8BA68A
     "F3 04 35 3F F3 04 35 3F"
 )
 
@@ -273,6 +285,27 @@ WALLRUN_LATCH_CAVE = bytes.fromhex(  # at 0x8BA690, jumped to from WALLRUN_CAVE'
     "C7 87 E8 13 00 00 01 00 00 00"
     # add esp,0x60 ; popad ; jmp 0x64DAF7   (handler exit, wall run running)
     "83 C4 60 61 E9 54 34 D9 FF"
+)
+
+# Wall torpedo: when the wall jump-off's push-off animation ends, 0x6D3190 picks an attack from
+# the recent presses. Primary attack picks the torpedo (move 0x273), but only with a target;
+# secondary attack picks the spin and forces it after a horizontal wall jump-off ([esp+0x1C]).
+# After a Jump-key jump-off, primary attack sets that same force flag, so the torpedo launches
+# without a target along the facing, which is then the 45 degree flight direction.
+WALLTORPEDO_CAVE = bytes.fromhex(  # at 0x8BA6B0, jumped to from the primary-attack branch 0x6D32BD
+    # mov ebx,2   (replayed: torpedo kind)
+    "BB 02 00 00 00"
+    # cmp byte [0xDBFCF0],0 ; je back   (not a Jump-key jump-off: vanilla, needs a target)
+    "80 3D F0 FC DB 00 00 74 1B"
+    # push esi ; call 0x497B90 ; add esp,4   (current animation)
+    "56 E8 CC D4 BD FF 83 C4 04"
+    # cmp eax,0x78 ; je force ; cmp eax,0x79 ; jne back   (only the horizontal wall jump-off's
+    # push-off, which always passes the angle cave first, so a stale flag never matters)
+    "83 F8 78 74 05 83 F8 79 75 08"
+    # force: mov dword [esp+0x1C],1   (the force flag the secondary-attack branch sets)
+    "C7 44 24 1C 01 00 00 00"
+    # back: jmp 0x6D32C2
+    "E9 E4 8B E1 FF"
 )
 
 # (file offset, original bytes, new bytes)
@@ -344,6 +377,10 @@ PATCHES = [
     (0x4BA5E0, bytes(len(WALLJUMP_ANGLE_CAVE)), WALLJUMP_ANGLE_CAVE),
     # Wall-run addon: latch cave in the .text slack at 0x8BA690, after the angled wall jump cave
     (0x4BA690, bytes(len(WALLRUN_LATCH_CAVE)), WALLRUN_LATCH_CAVE),
+    # Wall torpedo: 0x6D32BD primary-attack branch of the wall-attack check -> jmp to the cave
+    (0x2D32BD, bytes.fromhex("BB 02 00 00 00"), bytes.fromhex("E9 EE 73 1E 00")),
+    # Wall torpedo: cave in the .text slack at 0x8BA6B0, after the latch cave
+    (0x4BA6B0, bytes(len(WALLTORPEDO_CAVE)), WALLTORPEDO_CAVE),
 ]
 
 # Vertical wall runs from jumps (optional, on by default): the wall-run cave's head-on check at
