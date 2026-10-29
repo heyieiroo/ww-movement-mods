@@ -17,6 +17,10 @@ Space everywhere, except that Direction + Jump is a forward jump instead of a ro
 unchanged (Direction + Space still rolls). The key can be rebound like any other action. Remember
 to rebind it in the menu if the profile isn't new.
 
+<p align="center">
+  <img src="media/jump-keybind.png" width="560" alt="The keyboard controls menu with the new Jump action bound to V">
+</p>
+
 ### Wall runs from jumps
 
 <div align="center">
@@ -26,8 +30,8 @@ to rebind it in the menu if the profile isn't new.
       <th>Vertical (optional)</th>
     </tr>
     <tr>
-      <td><img src="media/horizontal-wallrun.gif" width="380" alt="A horizontal wall run started from a jump"></td>
-      <td><img src="media/vertical-wallrun.gif" width="380" alt="A vertical wall run started from a jump"></td>
+      <td><img src="media/horizontal-wallrun.gif" width="100%" alt="A horizontal wall run started from a jump"></td>
+      <td><img src="media/vertical-wallrun.gif" width="100%" alt="A vertical wall run started from a jump"></td>
     </tr>
   </table>
 </div>
