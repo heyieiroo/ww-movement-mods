@@ -6,14 +6,38 @@ distributed. You need your own Steam copy of the game.
 
 ## Features
 
-- **Jump key.** A new "Jump" action in *Options > Controls*, listed after Roll/Jump, default **V**.
-  It acts like Space everywhere, except that Direction + Jump is a forward jump instead of a roll.
-  Space itself is unchanged (Direction + Space still rolls). The key can be rebound like any other
-  action. Remember to rebind it in the menu if the profile isn't new.
-- **Wall-run addon.** You can now also start wallruns by jumping into a wall. Hold the wall-run 
-  button while jumping or rebounding into a wall at an angle (not head-on) to start a horizontal 
-  wall run from mid-air.
-- **Story-trigger fix.** Made story triggers less likely to be skipped by jumping over them.
+### Jump key
+
+<p align="center">
+  <img src="media/jump.gif" width="560" alt="The Prince jumping with the new Jump key">
+</p>
+
+A new "Jump" action in *Options > Controls*, listed after Roll/Jump, default **V**. It acts like
+Space everywhere, except that Direction + Jump is a forward jump instead of a roll. Space itself is
+unchanged (Direction + Space still rolls). The key can be rebound like any other action. Remember
+to rebind it in the menu if the profile isn't new.
+
+### Wall runs from jumps
+
+<div align="center">
+  <table>
+    <tr>
+      <th>Horizontal</th>
+      <th>Vertical (optional)</th>
+    </tr>
+    <tr>
+      <td><img src="media/horizontal-wallrun.gif" width="380" alt="A horizontal wall run started from a jump"></td>
+      <td><img src="media/vertical-wallrun.gif" width="380" alt="A vertical wall run started from a jump"></td>
+    </tr>
+  </table>
+</div>
+
+You can now also start wallruns by jumping into a wall. Hold the wallrun button while jumping or
+rebounding into a wall. Vertical wallruns are optional; the patcher asks whether to include them.
+
+### Story-trigger fix
+
+Made story triggers less likely to be skipped by jumping over them.
 
 ## Requirements
 
@@ -30,25 +54,25 @@ distributed. You need your own Steam copy of the game.
    python pop2_movement_patch.py "<game folder>/POP2.EXE" [output path]
    ```
 
-   The output defaults to `POP2_patched.EXE` next to the input. The input is never modified.
+   The script asks whether to include vertical wall runs from jumps (press Enter for yes). To skip
+   the question, add `--vertical-wallruns` or `--no-vertical-wallruns`. The output defaults to
+   `POP2_patched.EXE` next to the input. The input is never modified.
 3. Replace `POP2.EXE` with the patched file (rename it to `POP2.EXE`).
 
 The script refuses any input that is not the original Steam exe, checks every byte before changing
-it, and verifies the sha256 of the result
-(`f9b40d56f5828243a0ab15cfee02bf873a8f20198f2fae8bdc1fcccc3c3073c9`).
+it, and verifies the sha256 of the result:
+
+| Version | sha256 |
+|---|---|
+| With vertical wall runs (default) | `9138830c28532a319ac20e230ccc7a2c1055fc486a6e871debadfd599bc4d642` |
+| Horizontal wall runs only | `f9b40d56f5828243a0ab15cfee02bf873a8f20198f2fae8bdc1fcccc3c3073c9` |
+
 If you previously applied an older version of these mods, restore the original exe first (from your
 backup, or *Steam > Properties > Installed Files > Verify integrity*).
 
 ## Uninstall
 
 Restore your backup of `POP2.EXE`, or let Steam verify the game files.
-
-## Repository layout
-
-| File | Purpose |
-|---|---|
-| `pop2_movement_patch.py` | The patcher. Use this one. |
-| `patch_jump.py`, `patch_wallrun.py` | Early per-mod development scripts, kept for history. They produce the older Shift+Space jump addon and are superseded. |
 
 ## Disclaimer
 

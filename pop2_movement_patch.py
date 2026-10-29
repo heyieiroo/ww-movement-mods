@@ -6,8 +6,9 @@ Changes:
     Space is vanilla again (direction + Space = roll). Existing profiles start with the
     new action unbound: bind it in the menu or use Default settings.
   * Wall-run addon: hold the wall-run button (right mouse by default) while jumping or
-    rebounding into a wall at an angle (not head-on) to start a horizontal wall run
-    from mid-air. Keep holding it to chain runs.
+    rebounding into a wall to start a wall run from mid-air. Keep holding it to chain runs.
+    At an angle the run is horizontal; head-on (within 30 degrees) it is vertical. Vertical
+    air runs are optional (the script asks); without them a head-on contact stays vanilla.
   * Stairs-jump fix: a normal jump can no longer land before its apex. Fixes the instant
     landing when jumping up a slope or stairs near an edge (also present in vanilla).
   * Story-trigger fix: the game refuses story triggers while the Prince is in a jump, so
@@ -16,17 +17,22 @@ Changes:
     to the take-off height. Only story triggers are affected.
 
 Usage: python pop2_movement_patch.py <path to original POP2.EXE> [output path]
+           [--vertical-wallruns | --no-vertical-wallruns]
 
-The output defaults to POP2_patched.EXE next to the input. The original file is never
+Without either option the script asks whether to include vertical wall runs from jumps
+(Enter = yes; with no console to answer, yes). The output defaults to POP2_patched.EXE next to the input. The original file is never
 modified. Back it up, then replace POP2.EXE with the patched file. The script only accepts
 the unmodified Steam POP2.EXE and checks every byte it changes. Requires Python 3.8+.
 """
+import argparse
 import hashlib
 import sys
 from pathlib import Path
 
 ORIGINAL_SHA256 = "5559117d013155bbad608cedc2fd0dd272f37ed92c936fc4e151287f3b5ff1cb"
-PATCHED_SHA256 = "f9b40d56f5828243a0ab15cfee02bf873a8f20198f2fae8bdc1fcccc3c3073c9"
+# sha256 of the output with and without vertical wall runs from jumps
+PATCHED_SHA256_VERTICAL = "9138830c28532a319ac20e230ccc7a2c1055fc486a6e871debadfd599bc4d642"
+PATCHED_SHA256_HORIZONTAL = "f9b40d56f5828243a0ab15cfee02bf873a8f20198f2fae8bdc1fcccc3c3073c9"
 
 # sha256 -> description of builds produced by earlier versions of this script
 KNOWN_OLDER_BUILDS = {
@@ -64,7 +70,8 @@ WALLRUN_CAVE = bytes.fromhex(
     # 0x49FA30(obj,0x80,&facing,0.0,&n) ; none -> skip ; 0x47C620(&n) flatten+normalize
     "8D 43 0C 50 FF 35 28 BD 8B 00 53 68 80 00 00 00 FF 35 48 4A D3 00 E8 72 58 BE FF"
     "83 C4 14 85 C0 0F 84 DB 00 00 00 8D 43 0C 50 E8 4E 24 BC FF 83 C4 04"
-    # |facing.xy . n.xy| > cos30 (0x8C0E74) -> skip   (head-on stays vanilla, no vertical run)
+    # |facing.xy . n.xy| > cos30 (0x8C0E74) -> skip   (head-on stays vanilla, no vertical run;
+    # the je at 0x8BA1EF is removed by VERTICAL_WALLRUN_PATCH)
     "D9 03 D8 4B 0C D9 43 04 D8 4B 10 DE C1 D9 E1 D8 1D 74 0E 8C 00 DF E0 F6 C4 41"
     "0F 84 AF 00 00 00"
     # save the 13 fields 0x526920 can write before failing late
@@ -284,13 +291,47 @@ PATCHES = [
      bytes.fromhex("00 ED 4A 00")),
 ]
 
+# Vertical wall runs from jumps (optional, on by default): the wall-run cave's head-on check at
+# 0x8BA1EF -> nops, so a contact within 30 degrees of head-on also reaches 0x526920, which starts
+# a vertical run there. Applied after PATCHES: its original bytes are the cave written by them.
+VERTICAL_WALLRUN_PATCH = (
+    0x4BA1EF, bytes.fromhex("0F 84 AF 00 00 00"), bytes.fromhex("90 90 90 90 90 90"))
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Movement patch for Prince of Persia: Warrior Within (Steam POP2.EXE).")
+    parser.add_argument("input", type=Path, help="path to the original POP2.EXE")
+    parser.add_argument("output", type=Path, nargs="?",
+                        help="output path (default: POP2_patched.EXE next to the input)")
+    vertical = parser.add_mutually_exclusive_group()
+    vertical.add_argument("--vertical-wallruns", dest="vertical", action="store_true",
+                          help="include vertical wall runs from jumps without asking")
+    vertical.add_argument("--no-vertical-wallruns", dest="vertical", action="store_false",
+                          help="only horizontal wall runs from jumps, without asking")
+    parser.set_defaults(vertical=None)
+    return parser.parse_args()
+
+
+def ask_vertical_wallruns() -> bool:
+    """Ask whether to include vertical wall runs from jumps. Enter or no console means yes."""
+    while True:
+        try:
+            answer = input("Include vertical wall runs from jumps? [Y/n] ").strip().lower()
+        except EOFError:
+            print()
+            return True
+        if answer in ("", "y", "yes"):
+            return True
+        if answer in ("n", "no"):
+            return False
+        print("Please answer y or n.")
+
 
 def main() -> int:
-    if len(sys.argv) not in (2, 3):
-        print(__doc__)
-        return 2
-    src = Path(sys.argv[1])
-    dst = Path(sys.argv[2]) if len(sys.argv) == 3 else src.with_name("POP2_patched.EXE")
+    args = parse_args()
+    src = args.input
+    dst = args.output or src.with_name("POP2_patched.EXE")
     if not src.is_file():
         print(f"Input not found: {src}")
         return 1
@@ -300,7 +341,7 @@ def main() -> int:
 
     data = bytearray(src.read_bytes())
     sha = hashlib.sha256(data).hexdigest()
-    if sha == PATCHED_SHA256:
+    if sha in (PATCHED_SHA256_VERTICAL, PATCHED_SHA256_HORIZONTAL):
         print("This file is already patched. Nothing written.")
         return 1
     if sha in KNOWN_OLDER_BUILDS:
@@ -312,22 +353,33 @@ def main() -> int:
         print("Input is not the original Steam POP2.EXE (sha256 mismatch). Nothing written.")
         return 1
 
-    for offset, original, new in PATCHES:
+    vertical = args.vertical
+    if vertical is None:
+        try:
+            vertical = ask_vertical_wallruns()
+        except KeyboardInterrupt:
+            print("\nCancelled. Nothing written.")
+            return 1
+    patches = PATCHES + ([VERTICAL_WALLRUN_PATCH] if vertical else [])
+    expected_sha = PATCHED_SHA256_VERTICAL if vertical else PATCHED_SHA256_HORIZONTAL
+
+    for offset, original, new in patches:
         assert len(original) == len(new)
         if data[offset:offset + len(original)] != original:
             print(f"Unexpected bytes at file offset {offset:#x}. Nothing written.")
             return 1
         data[offset:offset + len(new)] = new
 
-    if hashlib.sha256(data).hexdigest() != PATCHED_SHA256:
+    if hashlib.sha256(data).hexdigest() != expected_sha:
         print("Internal error: patched result has an unexpected sha256. Nothing written.")
         return 1
 
     dst.write_bytes(data)
-    if hashlib.sha256(dst.read_bytes()).hexdigest() != PATCHED_SHA256:
+    if hashlib.sha256(dst.read_bytes()).hexdigest() != expected_sha:
         print(f"Verification of {dst} failed; delete it and try again.")
         return 1
-    print(f"Patched copy written to {dst}")
+    print(f"Patched copy written to {dst} "
+          f"({'with' if vertical else 'without'} vertical wall runs from jumps)")
     print("Back up the original POP2.EXE, then replace it with the patched file.")
     return 0
 
