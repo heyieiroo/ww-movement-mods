@@ -93,8 +93,8 @@ it, and verifies the sha256 of the result:
 
 | Version | sha256 |
 |---|---|
-| With vertical wall runs (default) | `76ee11cd70499db89c50a4f02408eb1996dc53043c36d1b78e3955682397f93e` |
-| Horizontal wall runs only | `2f097c8673f50b7ad65db7596c67d3664e67a5ed505a44ec779186c6ec3550ae` |
+| With vertical wall runs (default) | `e13659e0fecebc8d4d259be90f2271515bd63e82b9dad34696fb732c49475587` |
+| Horizontal wall runs only | `968fd715b305148ec8c634d8ebfbdb20a241529b985e61259a84530e0374c5bc` |
 
 If you previously applied an older version of these mods, restore the original exe first (from your
 backup, or *Steam > Properties > Installed Files > Verify integrity*).
