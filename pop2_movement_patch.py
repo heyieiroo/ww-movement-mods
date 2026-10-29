@@ -15,8 +15,10 @@ Changes:
     jumping through or over one could skip story progress (also present in vanilla). Such a
     trigger now fires when he lands, as if he had walked through it. Jumping over counts down
     to the take-off height. Only story triggers are affected.
+  * Angled wall jump: jump off a horizontal wall run with the Jump key (V by default) to leap
+    45 degrees toward the running direction. Space still jumps straight out from the wall.
 
-Usage: python pop2_movement_patch.py <path to original POP2.EXE> [output path]
+Usage: python pop2_movement_patch.py <path to original POP2.EXE> [output file or folder]
            [--vertical-wallruns | --no-vertical-wallruns]
 
 Without either option the script asks whether to include vertical wall runs from jumps
@@ -31,8 +33,8 @@ from pathlib import Path
 
 ORIGINAL_SHA256 = "5559117d013155bbad608cedc2fd0dd272f37ed92c936fc4e151287f3b5ff1cb"
 # sha256 of the output with and without vertical wall runs from jumps
-PATCHED_SHA256_VERTICAL = "9138830c28532a319ac20e230ccc7a2c1055fc486a6e871debadfd599bc4d642"
-PATCHED_SHA256_HORIZONTAL = "f9b40d56f5828243a0ab15cfee02bf873a8f20198f2fae8bdc1fcccc3c3073c9"
+PATCHED_SHA256_VERTICAL = "d938ffb98c67a49d30a41130a876b7fedda2eaf5e9dee9570cbe945fe54b025a"
+PATCHED_SHA256_HORIZONTAL = "3245e9119059103d989e168dd98ee4ef9c065914c3f6f87547ff751b28c6a412"
 
 # sha256 -> description of builds produced by earlier versions of this script
 KNOWN_OLDER_BUILDS = {
@@ -42,6 +44,10 @@ KNOWN_OLDER_BUILDS = {
         "jump + wall-run addons + stairs-jump fix",
     "88193b3d610c10c8ebe33a5cfb25fd27c59c2f27d6a6b81a92ecb676a817f926":
         "jump key + wall-run addon + stairs-jump fix",
+    "9138830c28532a319ac20e230ccc7a2c1055fc486a6e871debadfd599bc4d642":
+        "jump key + wall-run addon with vertical runs + stairs-jump and story-trigger fixes",
+    "f9b40d56f5828243a0ab15cfee02bf873a8f20198f2fae8bdc1fcccc3c3073c9":
+        "jump key + wall-run addon + stairs-jump and story-trigger fixes",
 }
 
 # Code caves. Addresses in comments are virtual addresses; file offset = VA - 0x400000.
@@ -88,8 +94,8 @@ WALLRUN_CAVE = bytes.fromhex(
     "8F 87 CC 04 00 00"
     # skip: add esp,0x2C ; popad ; jmp 0x64CEBA   (vanilla wall-contact path)
     "83 C4 2C 61 E9 0D 2C D9 FF"
-    # started: add esp,0x60 ; popad ; jmp 0x64DAF7   (handler exit, wall run running)
-    "83 C4 60 61 E9 41 38 D9 FF"
+    # started: jmp 0x8BA690 ; 4x nop   (WALLRUN_LATCH_CAVE, then the handler exit)
+    "E9 DE 03 00 00 90 90 90 90"
     # padding ; VZMIN = -10.0f at VA 0x8BA2B8 (file 0x4BA2B8)
     "66 90 00 00 20 C1"
 )
@@ -226,6 +232,49 @@ STORYTRIGGER_CAVE = bytes.fromhex(  # at 0x8BA3C0, called from 0x5CF620
     "8D 76 00 00 00 80 3E 00 00 40 40 00 00 20 41"
 )
 
+# Angled wall jump: the horizontal wall-run jump-off has no direction of its own; its push-off
+# animation (0x78/0x79) launches relative to the Prince's facing, which is the run direction f.
+# When the Jump key triggered it, the facing is turned 45 degrees toward the wall first,
+# f' = cos45*f - sin45*n (n = wall normal [vars+0x61C], stored by the wall-run handler this
+# frame), so the leap turns 45 degrees from straight out toward the run direction.
+WALLJUMP_ANGLE_CAVE = bytes.fromhex(  # at 0x8BA5E0, jumped to from the jump-off 0x591019
+    # test byte [0x93F062], 1 ; 3x nop ; jne angled   (pad bit 16 = Jump key held, set by
+    # PAD_CAVE together with the Space bit, so Space alone keeps the vanilla jump-off)
+    "F6 05 62 F0 93 00 01 90 90 90 75 0B"
+    # mov edx,[0xD34A48] ; jmp 0x59101F   (replayed hook: vanilla jump-off)
+    "8B 15 48 4A D3 00 E9 28 6A CD FF"
+    # angled: pushad ; sub esp,0x18 ; mov ebx,esp   (f = [ebx], f' = [ebx+0xC])
+    "60 83 EC 18 89 E3"
+    # 0x490850(obj,&f)   facing
+    "53 FF 35 48 4A D3 00 E8 47 62 BD FF 83 C4 08"
+    # f'.x = COS45*f.x - SIN45*n.x
+    "D9 05 88 A6 8B 00 D8 8E 1C 06 00 00 D9 5B 0C"
+    "D9 05 84 A6 8B 00 D8 0B D8 63 0C D9 5B 0C"
+    # f'.y = COS45*f.y - SIN45*n.y
+    "D9 05 88 A6 8B 00 D8 8E 20 06 00 00 D9 5B 10"
+    "D9 05 84 A6 8B 00 D8 4B 04 D8 63 10 D9 5B 10"
+    # f'.z = 0 ; 0x47C620(&f') flatten + normalize
+    "C7 43 14 00 00 00 00 8D 43 0C 50 E8 C9 1F BC FF 83 C4 04"
+    # up = (0,0,1) on the stack ; 0x4902A0(obj,&f',&up)   set facing
+    "68 00 00 80 3F 6A 00 6A 00 89 E0 50 8D 43 0C 50 FF 35 48 4A D3 00 E8 2B 5C BD FF"
+    # add esp,0x30 ; popad ; mov edx,[0xD34A48] ; jmp 0x59101F   (replayed hook, new facing)
+    "83 C4 30 61 8B 15 48 4A D3 00 E9 9B 69 CD FF"
+    # COS45 = 0.707107f at VA 0x8BA684 ; SIN45 = 0.707107f at 0x8BA688
+    "F3 04 35 3F F3 04 35 3F"
+)
+
+# Wall-run addon, held-button chains: a running horizontal wall run continues only while the
+# wall-run latch [vars+0x13E8] is set (0x590D8B). The game sets it on a fresh press and clears it
+# on release, but also clears it inside chains while the button is still held, so an air run
+# started from the held button would wind down after a moment. Setting the latch when the cave
+# starts a run makes it behave like a freshly pressed run; releasing still clears it.
+WALLRUN_LATCH_CAVE = bytes.fromhex(  # at 0x8BA690, jumped to from WALLRUN_CAVE's started path
+    # mov dword [edi+0x13E8],1   (edi = Prince data, button confirmed held this frame)
+    "C7 87 E8 13 00 00 01 00 00 00"
+    # add esp,0x60 ; popad ; jmp 0x64DAF7   (handler exit, wall run running)
+    "83 C4 60 61 E9 54 34 D9 FF"
+)
+
 # (file offset, original bytes, new bytes)
 PATCHES = [
     # Jump key: 0x4DD331 roll block entry -> jmp to the jump cave
@@ -289,6 +338,12 @@ PATCHES = [
     (0x1D0,
      bytes.fromhex("D8 EC 4A 00"),
      bytes.fromhex("00 ED 4A 00")),
+    # Angled wall jump: 0x591019 horizontal wall-run jump-off -> jmp to the cave
+    (0x191019, bytes.fromhex("8B 15 48 4A D3 00"), bytes.fromhex("E9 C2 95 32 00 90")),
+    # Angled wall jump: cave in the .text slack at 0x8BA5E0, after the stairs-jump gate cave
+    (0x4BA5E0, bytes(len(WALLJUMP_ANGLE_CAVE)), WALLJUMP_ANGLE_CAVE),
+    # Wall-run addon: latch cave in the .text slack at 0x8BA690, after the angled wall jump cave
+    (0x4BA690, bytes(len(WALLRUN_LATCH_CAVE)), WALLRUN_LATCH_CAVE),
 ]
 
 # Vertical wall runs from jumps (optional, on by default): the wall-run cave's head-on check at
@@ -303,7 +358,8 @@ def parse_args() -> argparse.Namespace:
         description="Movement patch for Prince of Persia: Warrior Within (Steam POP2.EXE).")
     parser.add_argument("input", type=Path, help="path to the original POP2.EXE")
     parser.add_argument("output", type=Path, nargs="?",
-                        help="output path (default: POP2_patched.EXE next to the input)")
+                        help="output file or folder (default: POP2_patched.EXE next to the input; "
+                             "a folder gets POP2_patched.EXE inside it)")
     vertical = parser.add_mutually_exclusive_group()
     vertical.add_argument("--vertical-wallruns", dest="vertical", action="store_true",
                           help="include vertical wall runs from jumps without asking")
@@ -331,7 +387,10 @@ def ask_vertical_wallruns() -> bool:
 def main() -> int:
     args = parse_args()
     src = args.input
-    dst = args.output or src.with_name("POP2_patched.EXE")
+    default_name = "POP2_patched.EXE"
+    dst = args.output or src.with_name(default_name)
+    if dst.is_dir():
+        dst = dst / default_name
     if not src.is_file():
         print(f"Input not found: {src}")
         return 1
@@ -374,12 +433,15 @@ def main() -> int:
         print("Internal error: patched result has an unexpected sha256. Nothing written.")
         return 1
 
-    dst.write_bytes(data)
+    try:
+        dst.write_bytes(data)
+    except OSError as err:
+        print(f"Could not write {dst} ({err.strerror}).")
+        return 1
     if hashlib.sha256(dst.read_bytes()).hexdigest() != expected_sha:
         print(f"Verification of {dst} failed; delete it and try again.")
         return 1
-    print(f"Patched copy written to {dst} "
-          f"({'with' if vertical else 'without'} vertical wall runs from jumps)")
+    print(f"Patched copy written to {dst} ")
     print("Back up the original POP2.EXE, then replace it with the patched file.")
     return 0
 

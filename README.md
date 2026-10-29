@@ -37,7 +37,15 @@ to rebind it in the menu if the profile isn't new.
 </div>
 
 You can now also start wallruns by jumping into a wall. Hold the wallrun button while jumping or
-rebounding into a wall. Vertical wallruns are optional; the patcher asks whether to include them.
+rebounding into a wall, and keep holding it to chain wallruns without pressing it again. Vertical
+wallruns are optional; the patcher asks whether to include them.
+
+### Angled wall jump
+
+While wallrunning horizontally, jump off with the Jump key (**V**) to leap at 45 degrees toward the
+direction you are running, instead of straight out from the wall. Space still jumps straight out.
+Together with wallruns from jumps, this lets you chain into a wallrun on the next wall, for example
+around a corner.
 
 ### Story-trigger fix
 
@@ -60,7 +68,8 @@ Made story triggers less likely to be skipped by jumping over them.
 
    The script asks whether to include vertical wall runs from jumps (press Enter for yes). To skip
    the question, add `--vertical-wallruns` or `--no-vertical-wallruns`. The output defaults to
-   `POP2_patched.EXE` next to the input. The input is never modified.
+   `POP2_patched.EXE` next to the input; if you give a folder, the file is written there under that
+   name. The input is never modified.
 3. Replace `POP2.EXE` with the patched file (rename it to `POP2.EXE`).
 
 The script refuses any input that is not the original Steam exe, checks every byte before changing
@@ -68,8 +77,8 @@ it, and verifies the sha256 of the result:
 
 | Version | sha256 |
 |---|---|
-| With vertical wall runs (default) | `9138830c28532a319ac20e230ccc7a2c1055fc486a6e871debadfd599bc4d642` |
-| Horizontal wall runs only | `f9b40d56f5828243a0ab15cfee02bf873a8f20198f2fae8bdc1fcccc3c3073c9` |
+| With vertical wall runs (default) | `d938ffb98c67a49d30a41130a876b7fedda2eaf5e9dee9570cbe945fe54b025a` |
+| Horizontal wall runs only | `3245e9119059103d989e168dd98ee4ef9c065914c3f6f87547ff751b28c6a412` |
 
 If you previously applied an older version of these mods, restore the original exe first (from your
 backup, or *Steam > Properties > Installed Files > Verify integrity*).
