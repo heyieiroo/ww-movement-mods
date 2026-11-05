@@ -20,12 +20,18 @@ Changes:
     to leap 45 degrees toward the running direction. Space still jumps straight out.
   * Wall torpedo: jump off a horizontal wall run with Special Jump + primary attack (V + left
     click by default) to dive at 45 degrees in the torpedo attack, with or without an enemy.
+  * Wall slide (optional, the script asks): hold Drop (C by default) for a moment while jumping
+    into a wall that allows wall runs, and the Prince slides down it like on a curtain, steered
+    left/right with the direction keys. He stops sideways at corners, drops where the wall ends
+    or when C is released, grabs ledges on the way and lands softly. Space jumps off; Special
+    Jump + left/right jumps off at 45 degrees. It uses the curtain animations, so it works from
+    the first area with a curtain onward (the game loads them there; the patch keeps them).
 
 Usage: python pop2_movement_patch.py <path to original POP2.EXE> [output file or folder]
-           [--vertical-wallruns | --no-vertical-wallruns]
+           [--vertical-wallruns | --no-vertical-wallruns] [--wall-slide | --no-wall-slide]
 
-Without either option the script asks whether to include vertical wall runs from jumps
-(Enter = yes; with no console to answer, yes). The output defaults to POP2_patched.EXE next to the input. The original file is never
+Without these options the script asks whether to include vertical wall runs from jumps and the
+wall slide (Enter = yes; with no console to answer, yes). The output defaults to POP2_patched.EXE next to the input. The original file is never
 modified. Back it up, then replace POP2.EXE with the patched file. The script only accepts
 the unmodified Steam POP2.EXE and checks every byte it changes. Requires Python 3.8+.
 """
@@ -35,9 +41,13 @@ import sys
 from pathlib import Path
 
 ORIGINAL_SHA256 = "5559117d013155bbad608cedc2fd0dd272f37ed92c936fc4e151287f3b5ff1cb"
-# sha256 of the output with and without vertical wall runs from jumps
-PATCHED_SHA256_VERTICAL = "e13659e0fecebc8d4d259be90f2271515bd63e82b9dad34696fb732c49475587"
-PATCHED_SHA256_HORIZONTAL = "968fd715b305148ec8c634d8ebfbdb20a241529b985e61259a84530e0374c5bc"
+# sha256 of the output for (vertical wall runs from jumps, wall slide)
+PATCHED_SHA256 = {
+    (True, False): "e13659e0fecebc8d4d259be90f2271515bd63e82b9dad34696fb732c49475587",
+    (False, False): "968fd715b305148ec8c634d8ebfbdb20a241529b985e61259a84530e0374c5bc",
+    (True, True): "d679e1ea8617167104aa8772109cc12c3bbd488f829115768dd80f8b1a7bbc9d",
+    (False, True): "5ad99a5088b160a08438f00f92bad4041938aebfb5f8c8116e4e5c825e716258",
+}
 
 # sha256 -> description of builds produced by earlier versions of this script
 KNOWN_OLDER_BUILDS = {
@@ -308,6 +318,134 @@ WALLTORPEDO_CAVE = bytes.fromhex(  # at 0x8BA6B0, jumped to from the primary-att
     "E9 E4 8B E1 FF"
 )
 
+# Wall slide: a mode of the airborne handler's normal state 0x412, run from the wall-contact point
+# (after the handler's ledge/curtain probes and landing check, so those keep working). Each frame
+# with C held it sets the curtain animation, the facing into the wall and the fall height, and
+# moves the Prince by position (the curtain animations freeze his physics): sideways from the
+# stick at a fixed fraction of the descent speed, an accelerating descent computed from the
+# elapsed time (the same at any frame rate), with rays for corners, walls across the path and
+# the floor. Exits are the curtain jump-off (Space), a fall (C released, wall ended), a landing,
+# or whatever the earlier checks start; a new slide needs 0.1 s since the last slide frame.
+# The fall and landing exits use the curtain's own bottom exit (let-go animation, then the
+# velocity). Only a wall within 60 degrees of his facing (or of the wall he slides on) counts,
+# so a side wall at an inside corner is never taken.
+# The curtain animations are loaded only with curtain areas: a hook on the "remove animation
+# set" function keeps the Prince's copies (reference counted), and the slide starts only when
+# they are present.
+# State: 0xDBFD00 Prince data, 0xDBFD04 start time, 0xDBFD08 last slide frame, 0xDBFD0C last
+# contact, 0xDBFD10 wall normal (3 floats).
+WALLSLIDE_CAVE = bytes.fromhex(  # at 0x8BA6E0, jumped to from WALLRUN_CAVE (0x8BA135, 0x8BA13B) and from 0x497F20
+    # tunables (floats unless noted): HOLD 0.2 s, V0 2.25, ACC 3.0, VMAX 5.0, LAT 0.75 (x descent),
+    # FRONT 0.5 (cos 60 deg, wall check), GRACE 0.1 s, STALE 0.25 s, OUT 1.0, LOOK 0.45,
+    # REACH 1.0, PZ 1.0, STICK 0.25, SIDE 0.5, C45 0.7071, JWIN 0.2 s, FZ 0.5, BODY 0.4,
+    # HALF 0.5; dwords: ANIM 0x36C, FALLA 0x36D, JANIM 0x379, JANIM2 0x378, KEEP0 0x369,
+    # KEEPN 17
+    "CD CC 4C 3E 00 00 10 40 00 00 40 40 00 00 A0 40 00 00 40 3F 00 00 00 3F CD CC CC 3D 00 00 80 3E"
+    "00 00 80 3F 66 66 E6 3E 00 00 80 3F 00 00 80 3F 00 00 80 3E 00 00 00 3F F3 04 35 3F CD CC 4C 3E"
+    "00 00 00 3F CD CC CC 3E 00 00 00 3F 6C 03 00 00 6D 03 00 00 79 03 00 00 78 03 00 00 69 03 00 00"
+    "11 00 00 00"
+    # SL_CONTACT: pushad, ebp = 1 (wall contact) / SL_NOCONTACT: pushad, ebp = 0; main:
+    # locals, now = [0x940974] - [0xCD3318]; sliding = SL_VARS == Prince data and the
+    # last slide frame is not older than STALE
+    "60 BD 01 00 00 00 EB 03 60 31 ED 81 EC 60 01 00 00 89 E7 8B 1D 48 4A D3 00 8B 35 40 4A D3 00 8B"
+    "76 48 D9 05 74 09 94 00 D8 25 18 33 CD 00 D9 5F 4C 31 C0 89 47 30 89 47 34 C7 47 38 00 00 80 3F"
+    "89 47 78 89 47 7C 89 87 80 00 00 00 39 35 00 FD DB 00 75 24 D9 47 4C D8 25 08 FD DB 00 D8 1D FC"
+    "A6 8B 00 DF E0 F6 C4 41 0F 85 FF 00 00 00 C7 05 00 FD DB 00 00 00 00 00"
+    # not sliding: needs contact, C down for HOLD, GRACE since the last slide frame, the
+    # curtain animations in the table, a contact normal and no no-run flags 0x30000;
+    # orients the normal out of the wall from the contact points, then starts the slide
+    "85 ED 0F 84 B4 03 00 00 E8 90 05 00 00 0F 84 B5 03 00 00 D9 47 4C D8 A6 14 07 00 00 D8 1D E0 A6"
+    "8B 00 DF E0 F6 C4 01 0F 85 9B 03 00 00 D9 47 4C D8 25 08 FD DB 00 D9 5F 24 8B 47 24 3B 05 F8 A6"
+    "8B 00 0F 82 80 03 00 00 E8 4A 06 00 00 0F 84 75 03 00 00 8D 47 24 50 53 E8 37 60 BD FF 83 C4 08"
+    "E8 52 05 00 00 0F 84 5D 03 00 00 8D 47 54 50 53 E8 AF 44 BD FF 83 C4 08 68 80 00 00 00 6A 0F 8D"
+    "87 90 00 00 00 50 53 E8 88 54 BE FF 83 C4 10 89 C1 8D 97 90 00 00 00 D9 EE 85 C9 7E 1A D9 47 54"
+    "D8 22 D8 0F D9 47 58 D8 62 04 D8 4F 04 DE C1 DE C1 83 C2 0C 49 EB E2 D9 E4 DF E0 DD D8 F6 C4 01"
+    "74 05 E8 36 05 00 00 89 35 00 FD DB 00 8B 47 4C A3 04 FD DB 00 A3 08 FD DB 00 A3 0C FD DB 00 31"
+    "C0 89 86 2C 03 00 00 89 86 30 03 00 00 89 86 34 03 00 00 EB 53"
+    # sliding: refresh the normal (same side as last frame); without a usable contact, GRACE
+    # then fall; animations gone or C up -> fall exit; jump within JWIN -> jump exit
+    "85 ED 74 6A D9 05 10 FD DB 00 D9 E0 D9 5F 24 D9 05 14 FD DB 00 D9 E0 D9 5F 28 C7 47 2C 00 00 00"
+    "00 E8 9C 04 00 00 74 44 D9 07 D8 0D 10 FD DB 00 D9 47 04 D8 0D 14 FD DB 00 DE C1 D9 E4 DF E0 DD"
+    "D8 F6 C4 01 74 05 E8 BD 04 00 00 8B 47 4C A3 0C FD DB 00 8B 07 A3 10 FD DB 00 8B 47 04 A3 14 FD"
+    "DB 00 8B 47 08 A3 18 FD DB 00 EB 33 31 ED D9 47 4C D8 25 0C FD DB 00 D8 1D F8 A6 8B 00 DF E0 F6"
+    "C4 41 0F 84 69 02 00 00 A1 10 FD DB 00 89 07 A1 14 FD DB 00 89 47 04 A1 18 FD DB 00 89 47 08 E8"
+    "FE 04 00 00 0F 84 47 02 00 00 E8 F9 03 00 00 0F 84 3C 02 00 00 FF 35 1C A7 8B 00 6A 00 FF B6 B8"
+    "10 00 00 8D 47 48 50 53 E8 42 A7 E4 FF 83 C4 14 83 7F 48 00 0F 85 AC 02 00 00"
+    # slide frame: animation, facing into the wall, fall height reset; sideways from the stick
+    # (LAT x the descent step; stopped by the corner and clearance rays); descent
+    # d(now) - d(prev) (frame-rate independent); floor ray -> land exit; else the new
+    # position is set (0x48EFB0)
+    "A1 08 FD DB 00 89 87 50 01 00 00 8B 47 4C A3 08 FD DB 00 D9 47 4C D8 A7 50 01 00 00 D9 9F 48 01"
+    "00 00 D9 47 4C D8 25 04 FD DB 00 E8 22 05 00 00 D9 9F 44 01 00 00 D9 87 50 01 00 00 D8 25 04 FD"
+    "DB 00 E8 0B 05 00 00 D8 AF 44 01 00 00 D9 9F 44 01 00 00 53 E8 AC D1 BD FF 83 C4 04 3B 05 2C A7"
+    "8B 00 74 0F FF 35 2C A7 8B 00 53 E8 55 4B D5 FF 83 C4 08 E8 DA 03 00 00 E8 FD 03 00 00 C7 86 CC"
+    "04 00 00 01 00 00 00 E8 B1 03 00 00 D9 EE D9 5F 50 85 ED 0F 84 D2 00 00 00 D9 86 78 0E 00 00 D8"
+    "1D 10 A7 8B 00 DF E0 F6 C4 01 0F 85 BB 00 00 00 E8 DC 03 00 00 D9 86 78 0E 00 00 D9 E8 DB F1 72"
+    "04 DD D8 EB 02 DD D9 DE C9 D9 57 50 D9 E4 DF E0 DD D8 F6 C4 40 0F 85 90 00 00 00 D9 05 04 A7 8B"
+    "00 E8 43 04 00 00 D9 05 08 A7 8B 00 D9 E0 D9 C0 D8 0F D9 5F 6C D8 4F 04 D9 5F 70 C7 47 74 00 00"
+    "00 00 E8 08 04 00 00 85 C0 74 59 68 FF FF 00 00 53 E8 2F 56 BE FF 83 C4 08 A9 00 00 03 00 75 44"
+    "D9 EE E8 02 04 00 00 D9 47 50 D9 E1 D8 0D F0 A6 8B 00 D8 8F 44 01 00 00 D8 05 24 A7 8B 00 F6 47"
+    "53 80 74 02 D9 E0 D9 C0 D8 4F 0C D9 5F 6C D8 4F 10 D9 5F 70 C7 47 74 00 00 00 00 E8 AF 03 00 00"
+    "85 C0 74 07 C7 47 50 00 00 00 00 8B 47 54 89 47 60 8B 47 58 89 47 64 D9 47 5C D8 05 20 A7 8B 00"
+    "D9 5F 68 31 C0 89 47 6C 89 47 70 D9 05 20 A7 8B 00 D8 87 44 01 00 00 D9 E0 D9 5F 74 E8 6E 03 00"
+    "00 85 C0 75 66 D9 47 50 D8 0D F0 A6 8B 00 D8 8F 44 01 00 00 D9 C0 D8 4F 0C D8 47 54 D9 5F 54 D8"
+    "4F 10 D8 47 58 D9 5F 58 D9 47 5C D8 A7 44 01 00 00 D9 5F 5C 8D 47 54 50 53 E8 47 44 BD FF 83 C4"
+    "08"
+    # exits: frame end 0x64DE4F; vanilla no-contact 0x64D797; vanilla wall-run attempt
+    # 0x8BA141 (replays the 3 replaced instructions)
+    "81 C4 60 01 00 00 61 E9 D7 32 D9 FF 81 C4 60 01 00 00 61 E9 13 2C D9 FF 81 C4 60 01 00 00 61 60"
+    "83 EC 2C 89 E3 E9 AB F5 FF FF"
+    # land / fall exit, as the curtain bottom exit: start-fall 0x5EB660 with the let-go
+    # animation 0x36D, then the velocity 0x60E960 (outward 0 / OUT, current descent
+    # speed), fall height reset, slide off
+    "C7 87 4C 01 00 00 00 00 00 00 EB 0B A1 00 A7 8B 00 89 87 4C 01 00 00 C7 05 00 FD DB 00 00 00 00"
+    "00 D9 05 10 FD DB 00 D8 8F 4C 01 00 00 D9 5F 18 D9 05 14 FD DB 00 D8 8F 4C 01 00 00 D9 5F 1C D9"
+    "47 4C D8 25 04 FD DB 00 E8 FA 02 00 00 DD D8 D9 87 54 01 00 00 D8 0D E8 A6 8B 00 D8 05 E4 A6 8B"
+    "00 D9 E0 D9 5F 20 31 C0 50 6A 0A 6A 50 FF 35 30 A7 8B 00 50 50 6A 2C 53 E8 4D 0A D3 FF 83 C4 20"
+    "8D 47 18 50 53 E8 40 3D D5 FF 83 C4 08 E8 DD 01 00 00 C7 86 CC 04 00 00 01 00 00 00 E9 35 FF FF"
+    "FF"
+    # jump exit: the curtain jump-off (anim 0x379, 0x49DF10, 0x64B180); with Special Jump and
+    # a sideways stick the facing is turned 45 degrees toward the stick side; exit 0x64DE43
+    "C7 05 00 FD DB 00 00 00 00 00 E8 82 01 00 00 D9 07 D9 E0 D9 5F 24 D9 47 04 D9 E0 D9 5F 28 C7 47"
+    "2C 00 00 00 00 F6 05 62 F0 93 00 01 74 67 D9 86 78 0E 00 00 D8 1D 10 A7 8B 00 DF E0 F6 C4 01 75"
+    "54 E8 9F 01 00 00 D9 C0 D9 E1 D8 1D 14 A7 8B 00 DF E0 F6 C4 01 74 04 DD D8 EB 3A D9 E4 DF E0 DD"
+    "D8 D9 05 18 A7 8B 00 F6 C4 01 74 02 D9 E0 D9 C0 D8 4F 0C D9 07 D8 0D 18 A7 8B 00 DE C1 D9 E0 D9"
+    "5F 24 D8 4F 10 D9 47 04 D8 0D 18 A7 8B 00 DE C1 D9 E0 D9 5F 28 8D 47 30 50 8D 47 24 50 53 E8 C6"
+    "55 BD FF 83 C4 0C C7 86 88 09 00 00 00 00 00 00 FF 35 34 A7 8B 00 53 E8 8D 2D D2 FF 83 C4 08 8D"
+    "47 54 50 53 E8 E0 3F BD FF 83 C4 08 8B 47 54 89 86 DC 08 00 00 8B 47 58 89 86 E0 08 00 00 8B 47"
+    "5C 89 86 E4 08 00 00 89 86 04 02 00 00 C7 86 CC 04 00 00 00 00 00 00 6A 00 6A 13 53 E8 D8 31 BE"
+    "FF 83 C4 0C 68 9A 99 19 3E 8D 47 78 50 53 E8 36 04 D9 FF 83 C4 0C 81 C4 60 01 00 00 61 E9 EA 30"
+    "D9 FF"
+    # helpers: C down, contact normal, negate, tangent, face the wall, fall reset, stick .
+    # tangent, animations present (0x36C, 0x378, 0x379, 0x36D), ray, sideways origin,
+    # descent distance
+    "6A 01 FF B6 B8 10 00 00 8D 47 48 50 53 E8 E5 36 E6 FF 83 C4 10 83 7F 48 00 C3 8D 07 50 FF 35 F4"
+    "A6 8B 00 8D 47 24 50 68 80 00 00 00 53 E8 A5 4C BE FF 83 C4 14 85 C0 74 26 68 80 00 00 00 53 E8"
+    "33 53 BE FF 83 C4 08 A9 00 00 03 00 75 0F 8D 07 50 E8 71 18 BC FF 83 C4 04 83 C8 01 C3 31 C0 C3"
+    "D9 07 D9 E0 D9 1F D9 47 04 D9 E0 D9 5F 04 C3 D9 47 04 D9 E0 D9 5F 0C 8B 07 89 47 10 C7 47 14 00"
+    "00 00 00 C3 D9 07 D9 E0 D9 5F 24 D9 47 04 D9 E0 D9 5F 28 C7 47 2C 00 00 00 00 8D 47 30 50 8D 47"
+    "24 50 53 E8 9F 54 BD FF 83 C4 0C C3 8D 47 54 50 53 E8 D1 3E BD FF 83 C4 08 8B 47 5C 89 86 04 02"
+    "00 00 C3 D9 86 44 0A 00 00 D9 E0 D9 9F 84 00 00 00 8D 47 3C 50 FF B7 84 00 00 00 8D 47 30 50 8D"
+    "47 24 50 E8 8F 32 BC FF 83 C4 10 D9 47 3C D8 4F 0C D9 47 40 D8 4F 10 DE C1 C3 A1 2C A7 8B 00 E8"
+    "25 00 00 00 74 22 A1 34 A7 8B 00 E8 19 00 00 00 74 16 A1 38 A7 8B 00 E8 0D 00 00 00 74 0A A1 30"
+    "A7 8B 00 E8 01 00 00 00 C3 8B 4B 14 8B 09 8B 49 30 0F B7 11 39 D0 73 06 83 7C 81 08 00 C3 31 C0"
+    "C3 6A 01 6A 00 6A 00 6A FF 8D 47 6C 50 8D 47 60 50 53 E8 C0 71 BE FF 83 C4 1C C3 F6 47 53 80 74"
+    "02 D9 E0 D9 C0 D8 4F 0C D8 47 54 D9 5F 60 D8 4F 10 D8 47 58 D9 5F 64 D9 47 5C D8 05 0C A7 8B 00"
+    "D9 5F 68 C3 D9 05 EC A6 8B 00 D8 25 E4 A6 8B 00 D8 35 E8 A6 8B 00 DB F1 72 04 DD D8 D9 C0 D9 9F"
+    "54 01 00 00 D8 A7 54 01 00 00 D8 0D EC A6 8B 00 D9 87 54 01 00 00 D8 0D E8 A6 8B 00 D8 0D 28 A7"
+    "8B 00 D8 05 E4 A6 8B 00 D8 8F 54 01 00 00 DE C1 C3"
+    # SL_KEEP, hooked at 0x497F20 (remove animation set): for the Prince, the curtain
+    # animations 0x369..0x379 get an extra reference before the original runs; emptied
+    # slots get their pointer back afterwards, others release the extra reference
+    "8B 44 24 04 3B 05 14 C4 D0 00 74 0C 8B 44 24 04 8B 48 14 E9 E5 CF BD FF 60 81 EC 90 00 00 00 89"
+    "E7 8B 70 14 8B 36 8B 76 30 31 ED E8 67 00 00 00 74 02 8B 01 89 04 AF 85 C0 74 09 50 E8 85 C9 BD"
+    "FF 83 C4 04 E8 7F 00 00 00 72 E0 FF B4 24 B8 00 00 00 FF B4 24 B8 00 00 00 E8 AE FF FF FF 83 C4"
+    "08 31 ED E8 2F 00 00 00 74 1E 8B 04 AF 85 C0 74 17 83 39 00 75 04 89 01 EB 0E 8D 04 AF 6A 00 50"
+    "E8 D1 C9 BD FF 83 C4 08 E8 3B 00 00 00 72 D4 81 C4 90 00 00 00 61 C3 89 E8 8D 4E 08 3B 05 40 A7"
+    "8B 00 72 09 2B 05 40 A7 8B 00 8B 4E 04 03 05 3C A7 8B 00 0F B7 16 39 D0 73 0B 85 C9 74 07 8D 0C"
+    "81 31 C0 40 C3 31 C0 C3 45 A1 40 A7 8B 00 01 C0 39 C5 C3"
+)
+
 # (file offset, original bytes, new bytes)
 PATCHES = [
     # Jump key: 0x4DD331 roll block entry -> jmp to the jump cave
@@ -389,6 +527,24 @@ PATCHES = [
 VERTICAL_WALLRUN_PATCH = (
     0x4BA1EF, bytes.fromhex("0F 84 AF 00 00 00"), bytes.fromhex("90 90 90 90 90 90"))
 
+# Wall slide (optional, on by default). Applied after PATCHES: the hooks edit WALLRUN_CAVE and the
+# header value written by them.
+WALLSLIDE_PATCHES = [
+    # WALLRUN_CAVE 0x8BA135 "no wall contact" je 0x64D797 -> je SL_NOCONTACT 0x8BA74C
+    (0x4BA135, bytes.fromhex("0F 84 5C 36 D9 FF"), bytes.fromhex("0F 84 11 06 00 00")),
+    # WALLRUN_CAVE 0x8BA13B pushad / sub esp,0x2C / mov ebx,esp -> jmp SL_CONTACT 0x8BA744 ; nop
+    # (the cave replays the three instructions when the slide does not apply)
+    (0x4BA13B, bytes.fromhex("60 83 EC 2C 89 E3"), bytes.fromhex("E9 04 06 00 00 90")),
+    # remove animation set 0x497F20: mov eax,[esp+4] / mov ecx,[eax+0x14] -> jmp SL_KEEP 0x8BAF2A ;
+    # nop ; nop (the cave replays the two instructions)
+    (0x97F20, bytes.fromhex("8B 44 24 04 8B 48 14"), bytes.fromhex("E9 05 30 42 00 90 90")),
+    # cave in the .text slack at 0x8BA6E0, after the wall torpedo cave
+    (0x4BA6E0, bytes(len(WALLSLIDE_CAVE)), WALLSLIDE_CAVE),
+    # PE header, .data VirtualSize 0x4AED00 -> 0x4AEE00 (maps the state at 0xDBFD00..0xDBFD1B,
+    # zero-filled, inside the section's last page)
+    (0x1D0, bytes.fromhex("00 ED 4A 00"), bytes.fromhex("00 EE 4A 00")),
+]
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -402,15 +558,20 @@ def parse_args() -> argparse.Namespace:
                           help="include vertical wall runs from jumps without asking")
     vertical.add_argument("--no-vertical-wallruns", dest="vertical", action="store_false",
                           help="only horizontal wall runs from jumps, without asking")
-    parser.set_defaults(vertical=None)
+    slide = parser.add_mutually_exclusive_group()
+    slide.add_argument("--wall-slide", dest="slide", action="store_true",
+                       help="include the wall slide without asking")
+    slide.add_argument("--no-wall-slide", dest="slide", action="store_false",
+                       help="leave out the wall slide without asking")
+    parser.set_defaults(vertical=None, slide=None)
     return parser.parse_args()
 
 
-def ask_vertical_wallruns() -> bool:
-    """Ask whether to include vertical wall runs from jumps. Enter or no console means yes."""
+def ask_yes_no(question: str) -> bool:
+    """Ask a [Y/n] question. Enter or no console means yes."""
     while True:
         try:
-            answer = input("Include vertical wall runs from jumps? [Y/n] ").strip().lower()
+            answer = input(f"{question} [Y/n] ").strip().lower()
         except EOFError:
             print()
             return True
@@ -437,7 +598,7 @@ def main() -> int:
 
     data = bytearray(src.read_bytes())
     sha = hashlib.sha256(data).hexdigest()
-    if sha in (PATCHED_SHA256_VERTICAL, PATCHED_SHA256_HORIZONTAL):
+    if sha in PATCHED_SHA256.values():
         print("This file is already patched. Nothing written.")
         return 1
     if sha in KNOWN_OLDER_BUILDS:
@@ -449,15 +610,18 @@ def main() -> int:
         print("Input is not the original Steam POP2.EXE (sha256 mismatch). Nothing written.")
         return 1
 
-    vertical = args.vertical
-    if vertical is None:
-        try:
-            vertical = ask_vertical_wallruns()
-        except KeyboardInterrupt:
-            print("\nCancelled. Nothing written.")
-            return 1
-    patches = PATCHES + ([VERTICAL_WALLRUN_PATCH] if vertical else [])
-    expected_sha = PATCHED_SHA256_VERTICAL if vertical else PATCHED_SHA256_HORIZONTAL
+    vertical, slide = args.vertical, args.slide
+    try:
+        if vertical is None:
+            vertical = ask_yes_no("Include vertical wall runs from jumps?")
+        if slide is None:
+            slide = ask_yes_no("Include the wall slide (hold C against a wall)?")
+    except KeyboardInterrupt:
+        print("\nCancelled. Nothing written.")
+        return 1
+    patches = (PATCHES + ([VERTICAL_WALLRUN_PATCH] if vertical else [])
+               + (WALLSLIDE_PATCHES if slide else []))
+    expected_sha = PATCHED_SHA256[(vertical, slide)]
 
     for offset, original, new in patches:
         assert len(original) == len(new)

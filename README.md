@@ -63,6 +63,13 @@ wall, for example around a corner.
 Press the Special Jump key together with the primary attack (**V + Left click**) to launch the 
 torpedo attack along the same diagonal instead, with or without an enemy nearby.
 
+### Wall slide (optional) Work in Progress
+
+Hold the wallrun button (**C**) for a moment while in the air against a wall to slide down it, like
+on a curtain. Steer left and right while sliding, jump off with **Space** (straight out) or
+**V + direction** (45 degrees to that side), or release **C** to let go. The
+patcher asks whether to include it.
+
 ### Story-trigger fix
 
 Made story triggers less likely to be skipped by jumping over them.
@@ -82,8 +89,9 @@ Made story triggers less likely to be skipped by jumping over them.
    python pop2_movement_patch.py "<game folder>/POP2.EXE" [output path]
    ```
 
-   The script asks whether to include vertical wall runs from jumps (press Enter for yes). To skip
-   the question, add `--vertical-wallruns` or `--no-vertical-wallruns`. The output defaults to
+   The script asks whether to include vertical wall runs from jumps and the wall slide (press
+   Enter for yes). To skip the questions, add `--vertical-wallruns` or `--no-vertical-wallruns`,
+   and `--wall-slide` or `--no-wall-slide`. The output defaults to
    `POP2_patched.EXE` next to the input; if you give a folder, the file is written there under that
    name. The input is never modified.
 3. Replace `POP2.EXE` with the patched file (rename it to `POP2.EXE`).
@@ -93,8 +101,10 @@ it, and verifies the sha256 of the result:
 
 | Version | sha256 |
 |---|---|
-| With vertical wall runs (default) | `e13659e0fecebc8d4d259be90f2271515bd63e82b9dad34696fb732c49475587` |
-| Horizontal wall runs only | `968fd715b305148ec8c634d8ebfbdb20a241529b985e61259a84530e0374c5bc` |
+| Vertical wall runs and wall slide (default) | `d679e1ea8617167104aa8772109cc12c3bbd488f829115768dd80f8b1a7bbc9d` |
+| Vertical wall runs, no wall slide | `e13659e0fecebc8d4d259be90f2271515bd63e82b9dad34696fb732c49475587` |
+| Horizontal wall runs only, wall slide | `5ad99a5088b160a08438f00f92bad4041938aebfb5f8c8116e4e5c825e716258` |
+| Horizontal wall runs only, no wall slide | `968fd715b305148ec8c634d8ebfbdb20a241529b985e61259a84530e0374c5bc` |
 
 If you previously applied an older version of these mods, restore the original exe first (from your
 backup, or *Steam > Properties > Installed Files > Verify integrity*).
