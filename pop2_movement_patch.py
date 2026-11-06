@@ -26,6 +26,12 @@ Changes:
     or when C is released, grabs ledges on the way and lands softly. Space jumps off; Special
     Jump + left/right jumps off at 45 degrees. It uses the curtain animations, so it works from
     the first area with a curtain onward (the game loads them there; the patch keeps them).
+    Holding C also starts a slide without touching the wall: after dropping from a ledge or
+    when a wall run ends next to a runnable wall. No slide starts when a ledge he can still
+    grab is just below, or the floor is less than 1 unit below. If he ever gets stuck after a
+    slide, he lets go after half a second.
+  * Code section: the patch adds a 64 KB code section (.mods) for the mods' code; the wall slide
+    uses it.
 
 Usage: python pop2_movement_patch.py <path to original POP2.EXE> [output file or folder]
            [--vertical-wallruns | --no-vertical-wallruns] [--wall-slide | --no-wall-slide]
@@ -43,10 +49,10 @@ from pathlib import Path
 ORIGINAL_SHA256 = "5559117d013155bbad608cedc2fd0dd272f37ed92c936fc4e151287f3b5ff1cb"
 # sha256 of the output for (vertical wall runs from jumps, wall slide)
 PATCHED_SHA256 = {
-    (True, False): "e13659e0fecebc8d4d259be90f2271515bd63e82b9dad34696fb732c49475587",
-    (False, False): "968fd715b305148ec8c634d8ebfbdb20a241529b985e61259a84530e0374c5bc",
-    (True, True): "d679e1ea8617167104aa8772109cc12c3bbd488f829115768dd80f8b1a7bbc9d",
-    (False, True): "5ad99a5088b160a08438f00f92bad4041938aebfb5f8c8116e4e5c825e716258",
+    (True, False): "89815876a23200f8c3a47a752dae98d4778c2f075b09f1f7ffae740769b32c0b",
+    (False, False): "ab030994cc2862e6bcd3cf4425b392e63349abcb6aa7a81943ad1b958635feeb",
+    (True, True): "603d39971f178a6bf3eebb33a8d72c9a804c38d72fe362aef00c76e034a8827c",
+    (False, True): "3c6426a962ca8e0f42fbd81979e874cce22a5228d118534f4fdfa798c295df2b",
 }
 
 # sha256 -> description of builds produced by earlier versions of this script
@@ -66,6 +72,14 @@ KNOWN_OLDER_BUILDS = {
         "story-trigger fixes",
     "3245e9119059103d989e168dd98ee4ef9c065914c3f6f87547ff751b28c6a412":
         "jump key + wall-run addon + angled wall jump + stairs-jump and story-trigger fixes",
+    "e13659e0fecebc8d4d259be90f2271515bd63e82b9dad34696fb732c49475587":
+        "movement patch with vertical wall runs, without the code section",
+    "968fd715b305148ec8c634d8ebfbdb20a241529b985e61259a84530e0374c5bc":
+        "movement patch without vertical wall runs, without the code section",
+    "d679e1ea8617167104aa8772109cc12c3bbd488f829115768dd80f8b1a7bbc9d":
+        "movement patch with vertical wall runs and the first wall slide",
+    "5ad99a5088b160a08438f00f92bad4041938aebfb5f8c8116e4e5c825e716258":
+        "movement patch with the first wall slide, without vertical wall runs",
 }
 
 # Code caves. Addresses in comments are virtual addresses; file offset = VA - 0x400000.
@@ -446,6 +460,84 @@ WALLSLIDE_CAVE = bytes.fromhex(  # at 0x8BA6E0, jumped to from WALLRUN_CAVE (0x8
     "81 31 C0 40 C3 31 C0 C3 45 A1 40 A7 8B 00 01 C0 39 C5 C3"
 )
 
+MODS_CODE = bytes.fromhex(  # at 0xDC9000 (.mods), wall slide additions
+    # tunables (floats): search REACH 0.9, RZ 1.0, STAND 0.495, NZ 0.3; ledge gate DROP 0.6;
+    # edge check MAXFALL 7.0, CATCH 0.0, DMAX 3.0, TOP 0.5, HX 0.4, HY 0.4; floor check
+    # CLEAR 1.0, FZ 0.5, PROBE 3.0; watchdog STUCK 0.5 s, WIN 1.0 s, EPS 0.002
+    "66 66 66 3F 00 00 80 3F A4 70 FD 3E 9A 99 99 3E 9A 99 19 3F 00 00 E0 40 00 00 00 00 00 00 40 40"
+    "00 00 00 3F CD CC CC 3E CD CC CC 3E 00 00 80 3F 00 00 00 3F 00 00 40 40 00 00 00 3F 00 00 80 3F"
+    "6F 12 03 3B"
+    # SEARCH, from WALLRUN_CAVE 0x8BA135 on frames without wall contact: with C held for HOLD,
+    # the cooldown passed and the curtain animations loaded, one ray along the facing; a
+    # near-vertical runnable wall within REACH, faced within 60 degrees, and no catchable
+    # ledge or close floor below -> snap to STAND from it, velocity 0, slide state set
+    "60 81 EC 94 00 00 00 89 E7 8B 1D 48 4A D3 00 3B 1D 14 C4 D0 00 0F 85 6F 02 00 00 8B 35 40 4A D3"
+    "00 8B 76 48 D9 05 74 09 94 00 D8 25 18 33 CD 00 D9 1F 39 35 00 FD DB 00 75 19 D9 07 D8 25 08 FD"
+    "DB 00 D8 1D FC A6 8B 00 DF E0 F6 C4 41 0F 85 37 02 00 00 6A 01 FF B6 B8 10 00 00 8D 47 08 50 53"
+    "E8 A7 53 95 FF 83 C4 10 83 7F 08 00 0F 84 18 02 00 00 D9 07 D8 A6 14 07 00 00 D8 1D E0 A6 8B 00"
+    "DF E0 F6 C4 01 0F 85 FF 01 00 00 D9 07 D8 25 08 FD DB 00 D9 5F 04 8B 47 04 3B 05 F8 A6 8B 00 0F"
+    "82 E5 01 00 00 A1 2C A7 8B 00 E8 A4 05 00 00 0F 84 D5 01 00 00 A1 34 A7 8B 00 E8 94 05 00 00 0F"
+    "84 C5 01 00 00 A1 38 A7 8B 00 E8 84 05 00 00 0F 84 B5 01 00 00 A1 30 A7 8B 00 E8 74 05 00 00 0F"
+    "84 A5 01 00 00 8D 47 0C 50 53 E8 1D 77 6C FF 83 C4 08 C7 47 14 00 00 00 00 8D 47 0C 50 E8 DA 34"
+    "6B FF 83 C4 04 8D 47 18 50 53 E8 8D 5B 6C FF 83 C4 08 8B 47 18 89 47 24 8B 47 1C 89 47 28 D9 47"
+    "20 D8 05 04 90 DC 00 D9 5F 2C D9 05 00 90 DC 00 D9 C0 D8 4F 0C D9 5F 30 D8 4F 10 D9 5F 34 C7 47"
+    "38 00 00 00 00 6A 01 6A 00 6A 00 6A FF 8D 47 30 50 8D 47 24 50 53 E8 D1 8E 6D FF 83 C4 1C 85 C0"
+    "0F 84 24 01 00 00 8D 47 3C 50 53 E8 BC 95 6D FF 83 C4 08 8D 47 48 50 53 E8 4F 96 6D FF 83 C4 08"
+    "68 FF FF 00 00 53 E8 01 6F 6D FF 83 C4 08 A9 00 00 03 00 0F 85 F1 00 00 00 D9 47 50 D9 E1 D8 1D"
+    "0C 90 DC 00 DF E0 F6 C4 41 0F 84 DB 00 00 00 8D 47 48 50 E8 24 34 6B FF 83 C4 04 D9 47 0C D8 4F"
+    "48 D9 47 10 D8 4F 4C DE C1 D9 E0 D8 1D F4 A6 8B 00 DF E0 F6 C4 01 0F 85 AE 00 00 00 E8 3E 01 00"
+    "00 85 C0 79 0C E8 F6 01 00 00 73 0A E9 99 00 00 00 E9 94 00 00 00 D9 05 08 90 DC 00 D9 C0 D8 4F"
+    "48 D8 47 3C D9 5F 18 D8 4F 4C D8 47 40 D9 5F 1C 8D 47 18 50 53 E8 52 5D 6C FF 83 C4 08 31 C0 89"
+    "47 3C 89 47 40 89 47 44 8D 47 3C 50 53 E8 EA 56 84 FF 83 C4 08 89 35 00 FD DB 00 8B 07 A3 04 FD"
+    "DB 00 A3 08 FD DB 00 A3 0C FD DB 00 31 C0 89 86 2C 03 00 00 89 86 30 03 00 00 89 86 34 03 00 00"
+    "8B 47 48 A3 10 FD DB 00 8B 47 4C A3 14 FD DB 00 C7 05 18 FD DB 00 00 00 00 00 8B 07 A3 20 FD DB"
+    "00 8B 47 20 A3 24 FD DB 00 90 81 C4 94 00 00 00 61 E9 72 14 AF FF"
+    # LG_GATE, from 0x64CD81: skips the vanilla ledge probe during a search-started slide until
+    # he is DROP below its start (no re-grab of the ledge he dropped from)
+    "60 83 EC 10 8B 1D 48 4A D3 00 3B 1D 14 C4 D0 00 75 69 8B 35 40 4A D3 00 8B 76 48 39 35 00 FD DB"
+    "00 75 58 A1 04 FD DB 00 3B 05 20 FD DB 00 75 4B D9 05 74 09 94 00 D8 25 18 33 CD 00 D8 25 08 FD"
+    "DB 00 D8 1D FC A6 8B 00 DF E0 F6 C4 41 74 2C 89 E0 50 53 E8 AE 59 6C FF 83 C4 08 D9 05 24 FD DB"
+    "00 D8 64 24 08 D8 1D 10 90 DC 00 DF E0 F6 C4 01 74 09 83 C4 10 61 E9 4B 3A 88 FF 83 C4 10 61 A1"
+    "48 4A D3 00 E9 23 3A 88 FF"
+    # EDGE_CHECK: box query below the feet (vanilla ledge edges, mask 0x4FF40F), depth
+    # min(DMAX, MAXFALL - fallen - CATCH); an edge found -> no slide
+    "C7 47 70 FE FF FF FF D9 86 04 02 00 00 D8 67 20 D8 2D 14 90 DC 00 D8 25 18 90 DC 00 D9 05 1C 90"
+    "DC 00 D8 D1 DF E0 F6 C4 01 74 04 DD D9 EB 02 DD D8 D9 57 54 D9 E4 DF E0 DD D8 F6 C4 41 75 7E D9"
+    "05 24 90 DC 00 D9 57 64 D9 E0 D9 5F 58 D9 05 28 90 DC 00 D9 57 68 D9 E0 D9 5F 5C D9 47 54 D9 E0"
+    "D9 5F 60 A1 20 90 DC 00 89 47 6C 8D 47 64 50 8D 47 58 50 6A 00 53 E8 D2 4B 6D FF 83 C4 10 68 0F"
+    "F4 4F 00 6A 01 8D 47 18 50 6A 00 E8 7D 4D 6D FF 83 C4 10 89 47 70 85 C0 78 23 50 6A 00 E8 3B 4D"
+    "6D FF 83 C4 08 89 47 74 8D 47 78 50 8D 47 18 50 FF 77 70 6A 00 E8 23 4E 6D FF 83 C4 10 8B 47 70"
+    "C3"
+    # FLOOR_CHECK: ray straight down; floor closer than CLEAR below the feet -> no slide
+    "8B 47 18 89 47 24 8B 47 1C 89 47 28 D9 47 20 D8 05 30 90 DC 00 D9 5F 2C 31 C0 89 47 30 89 47 34"
+    "D9 05 30 90 DC 00 D8 05 34 90 DC 00 D9 E0 D9 5F 38 A1 34 90 DC 00 89 87 84 00 00 00 6A 01 6A 00"
+    "6A 00 6A FF 8D 47 30 50 8D 47 24 50 53 E8 FA 8B 6D FF 83 C4 1C 85 C0 74 1F 8D 87 88 00 00 00 50"
+    "53 E8 E6 92 6D FF 83 C4 08 D9 47 20 D8 A7 90 00 00 00 D9 9F 84 00 00 00 D9 87 84 00 00 00 D8 1D"
+    "2C 90 DC 00 DF E0 9E C3"
+    # CE_GATE, called from the slide's contact entry (0x8BA804): animation check, then the edge
+    # and floor checks
+    "E8 A2 19 AF FF 74 43 60 81 EC 94 00 00 00 89 E7 8D 47 18 50 53 E8 1A 58 6C FF 83 C4 08 E8 95 FE"
+    "FF FF 85 C0 79 11 E8 4D FF FF FF 73 14 81 C4 94 00 00 00 61 39 C0 C3 81 C4 94 00 00 00 61 39 C0"
+    "C3 81 C4 94 00 00 00 61 85 E4 C3"
+    # WATCHDOG, from 0x630160 (per-frame airborne handler): in 0x412, not moving for STUCK
+    # within WIN after a slide -> the slide's fall exit; retried every STUCK; then the
+    # animation-table helper
+    "60 83 EC 20 89 E7 8B 1D 48 4A D3 00 3B 1D 14 C4 D0 00 0F 85 79 01 00 00 8B 35 40 4A D3 00 8B 76"
+    "48 D9 05 74 09 94 00 D8 25 18 33 CD 00 D9 1F 8D 47 04 50 53 E8 B0 57 6C FF 83 C4 08 81 BE 40 06"
+    "00 00 12 04 00 00 0F 85 26 01 00 00 D9 07 D8 1D 34 FD DB 00 DF E0 F6 C4 01 0F 85 13 01 00 00 31"
+    "C9 D9 44 8F 04 D8 24 8D 28 FD DB 00 D9 E1 D8 1D 40 90 DC 00 DF E0 F6 C4 41 0F 84 F3 00 00 00 41"
+    "83 F9 03 72 DC D9 07 D8 25 34 FD DB 00 D8 1D 38 90 DC 00 DF E0 F6 C4 01 0F 85 F3 00 00 00 D9 07"
+    "D8 25 38 FD DB 00 D9 E4 DF E0 F6 C4 01 75 13 D8 1D 38 90 DC 00 DF E0 F6 C4 01 0F 85 D1 00 00 00"
+    "EB 02 DD D8 39 35 00 FD DB 00 0F 85 C1 00 00 00 D9 07 D8 25 08 FD DB 00 D8 1D FC A6 8B 00 DF E0"
+    "F6 C4 41 0F 85 A8 00 00 00 D9 05 34 FD DB 00 D8 25 08 FD DB 00 D8 1D 3C 90 DC 00 DF E0 F6 C4 41"
+    "0F 84 8B 00 00 00 8B 07 A3 38 FD DB 00 D9 05 10 FD DB 00 D8 0D 00 A7 8B 00 D9 5F 10 D9 05 14 FD"
+    "DB 00 D8 0D 00 A7 8B 00 D9 5F 14 D9 05 E4 A6 8B 00 D9 E0 D9 5F 18 31 C0 50 6A 0A 6A 50 FF 35 30"
+    "A7 8B 00 50 50 6A 2C 53 E8 1C 20 82 FF 83 C4 20 8D 47 10 50 53 E8 0F 53 84 FF 83 C4 08 8B 47 0C"
+    "89 86 04 02 00 00 C7 86 CC 04 00 00 01 00 00 00 EB 1F 8B 47 04 A3 28 FD DB 00 8B 47 08 A3 2C FD"
+    "DB 00 8B 47 0C A3 30 FD DB 00 8B 07 A3 34 FD DB 00 83 C4 20 61 81 EC E4 00 00 00 E9 CF 6A 86 FF"
+    "8B 4B 14 8B 09 8B 49 30 0F B7 11 39 D0 73 06 83 7C 81 08 00 C3 31 C0 C3"
+)
+
 # (file offset, original bytes, new bytes)
 PATCHES = [
     # Jump key: 0x4DD331 roll block entry -> jmp to the jump cave
@@ -521,6 +613,24 @@ PATCHES = [
     (0x4BA6B0, bytes(len(WALLTORPEDO_CAVE)), WALLTORPEDO_CAVE),
 ]
 
+# Code section (always): a new last section .mods (VA 0xDC9000, RVA 0x9C9000, file offset 0x547000,
+# 0x10000 bytes of int3, code | execute | read). The original file ends at 0x547000 (no overlay);
+# the bytes are appended before these header edits are applied.
+MODS_RAW, MODS_SIZE = 0x547000, 0x10000
+SECTION_PATCHES = [
+    # PE header: NumberOfSections 4 -> 5
+    (0x86, bytes.fromhex("04 00"), bytes.fromhex("05 00")),
+    # PE header: SizeOfCode 0x4C0000 -> 0x4D0000
+    (0x9C, bytes.fromhex("00 00 4C 00"), bytes.fromhex("00 00 4D 00")),
+    # PE header: SizeOfImage 0x9C8056 -> 0x9D9000
+    (0xD0, bytes.fromhex("56 80 9C 00"), bytes.fromhex("00 90 9D 00")),
+    # section table entry 5 (empty in the original): .mods, VirtualSize 0x10000, RVA 0x9C9000,
+    # SizeOfRawData 0x10000, PointerToRawData 0x547000, characteristics 0x60000020
+    (0x218, bytes(40), b".mods\0\0\0" + bytes.fromhex(
+        "00 00 01 00 00 90 9C 00 00 00 01 00 00 70 54 00 00 00 00 00 00 00 00 00 00 00 00 00"
+        "20 00 00 60")),
+]
+
 # Vertical wall runs from jumps (optional, on by default): the wall-run cave's head-on check at
 # 0x8BA1EF -> nops, so a contact within 30 degrees of head-on also reaches 0x526920, which starts
 # a vertical run there. Applied after PATCHES: its original bytes are the cave written by them.
@@ -530,8 +640,6 @@ VERTICAL_WALLRUN_PATCH = (
 # Wall slide (optional, on by default). Applied after PATCHES: the hooks edit WALLRUN_CAVE and the
 # header value written by them.
 WALLSLIDE_PATCHES = [
-    # WALLRUN_CAVE 0x8BA135 "no wall contact" je 0x64D797 -> je SL_NOCONTACT 0x8BA74C
-    (0x4BA135, bytes.fromhex("0F 84 5C 36 D9 FF"), bytes.fromhex("0F 84 11 06 00 00")),
     # WALLRUN_CAVE 0x8BA13B pushad / sub esp,0x2C / mov ebx,esp -> jmp SL_CONTACT 0x8BA744 ; nop
     # (the cave replays the three instructions when the slide does not apply)
     (0x4BA13B, bytes.fromhex("60 83 EC 2C 89 E3"), bytes.fromhex("E9 04 06 00 00 90")),
@@ -543,6 +651,18 @@ WALLSLIDE_PATCHES = [
     # PE header, .data VirtualSize 0x4AED00 -> 0x4AEE00 (maps the state at 0xDBFD00..0xDBFD1B,
     # zero-filled, inside the section's last page)
     (0x1D0, bytes.fromhex("00 ED 4A 00"), bytes.fromhex("00 EE 4A 00")),
+    # .mods code at 0xDC9000 (SEARCH, LG_GATE, EDGE_CHECK, FLOOR_CHECK, CE_GATE, WATCHDOG); its state
+    # is at 0xDBFD20..0xDBFD3B, in the .data page mapped above
+    (MODS_RAW, b"\xCC" * len(MODS_CODE), MODS_CODE),
+    # hooks into it (the contact entry call is inside WALLSLIDE_CAVE, written above)
+    # WALLRUN_CAVE 0x8BA135 "no wall contact" je 0x64D797 -> je SEARCH
+    (0x4BA135, bytes.fromhex("0F 84 5C 36 D9 FF"), bytes.fromhex("0F 84 09 EF 50 00")),
+    # 0x64CD81 mov eax,[0xD34A48] (before the ledge probe 0x546850) -> jmp LG_GATE
+    (0x24CD81, bytes.fromhex("A1 48 4A D3 00"), bytes.fromhex("E9 54 C5 77 00")),
+    # slide contact entry 0x8ba804 call (animation check) -> call CE_GATE
+    (0x4BA804, bytes.fromhex("E8 4A 06 00 00"), bytes.fromhex("E8 A3 EC 50 00")),
+    # 0x630160 sub esp,0xe4 (per-frame airborne handler) -> jmp WATCHDOG ; nop
+    (0x230160, bytes.fromhex("81 EC E4 00 00 00"), bytes.fromhex("E9 92 93 79 00 90")),
 ]
 
 
@@ -619,7 +739,11 @@ def main() -> int:
     except KeyboardInterrupt:
         print("\nCancelled. Nothing written.")
         return 1
-    patches = (PATCHES + ([VERTICAL_WALLRUN_PATCH] if vertical else [])
+    if len(data) != MODS_RAW:
+        print("Unexpected file size. Nothing written.")
+        return 1
+    data += b"\xCC" * MODS_SIZE
+    patches = (SECTION_PATCHES + PATCHES + ([VERTICAL_WALLRUN_PATCH] if vertical else [])
                + (WALLSLIDE_PATCHES if slide else []))
     expected_sha = PATCHED_SHA256[(vertical, slide)]
 

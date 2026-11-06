@@ -70,6 +70,9 @@ on a curtain. Steer left and right while sliding, jump off with **Space** (strai
 **V + direction** (45 degrees to that side), or release **C** to let go. The
 patcher asks whether to include it.
 
+Holding **C** also starts a slide when you drop from a ledge or a wallrun ends next to a wall, without
+touching it first. No slide starts when a ledge you can grab is just below or the floor is close.
+
 ### Story-trigger fix
 
 Made story triggers less likely to be skipped by jumping over them.
@@ -101,10 +104,10 @@ it, and verifies the sha256 of the result:
 
 | Version | sha256 |
 |---|---|
-| Vertical wall runs and wall slide (default) | `d679e1ea8617167104aa8772109cc12c3bbd488f829115768dd80f8b1a7bbc9d` |
-| Vertical wall runs, no wall slide | `e13659e0fecebc8d4d259be90f2271515bd63e82b9dad34696fb732c49475587` |
-| Horizontal wall runs only, wall slide | `5ad99a5088b160a08438f00f92bad4041938aebfb5f8c8116e4e5c825e716258` |
-| Horizontal wall runs only, no wall slide | `968fd715b305148ec8c634d8ebfbdb20a241529b985e61259a84530e0374c5bc` |
+| Vertical wall runs and wall slide (default) | `603d39971f178a6bf3eebb33a8d72c9a804c38d72fe362aef00c76e034a8827c` |
+| Vertical wall runs, no wall slide | `89815876a23200f8c3a47a752dae98d4778c2f075b09f1f7ffae740769b32c0b` |
+| Horizontal wall runs only, wall slide | `3c6426a962ca8e0f42fbd81979e874cce22a5228d118534f4fdfa798c295df2b` |
+| Horizontal wall runs only, no wall slide | `ab030994cc2862e6bcd3cf4425b392e63349abcb6aa7a81943ad1b958635feeb` |
 
 If you previously applied an older version of these mods, restore the original exe first (from your
 backup, or *Steam > Properties > Installed Files > Verify integrity*).
