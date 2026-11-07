@@ -65,10 +65,10 @@ torpedo attack along the same diagonal instead, with or without an enemy nearby.
 
 ### Wall slide (optional) Work in Progress
 
-Hold the wallrun button (**C**) for a moment while in the air against a wall to slide down it, like
-on a curtain. Steer left and right while sliding, jump off with **Space** (straight out) or
-**V + direction** (45 degrees to that side), or release **C** to let go. The
-patcher asks whether to include it.
+Hold the drop button (**C**) in the air against a wall to slide down it, like on a curtain, swords 
+drawn. Steer left and right while sliding, jump off with **Space** (straight out) or **Space + 
+direction** (45 degrees to that side), or release **C** to let go. The patcher asks whether to
+include it.
 
 Holding **C** also starts a slide when you drop from a ledge or a wallrun ends next to a wall, without
 touching it first. No slide starts when a ledge you can grab is just below or the floor is close.
@@ -104,9 +104,9 @@ it, and verifies the sha256 of the result:
 
 | Version | sha256 |
 |---|---|
-| Vertical wall runs and wall slide (default) | `603d39971f178a6bf3eebb33a8d72c9a804c38d72fe362aef00c76e034a8827c` |
+| Vertical wall runs and wall slide (default) | `cf4b50c6089071b69b8a9fd671db2314e5f267ae0a762a8ff17d67f046445f0b` |
 | Vertical wall runs, no wall slide | `89815876a23200f8c3a47a752dae98d4778c2f075b09f1f7ffae740769b32c0b` |
-| Horizontal wall runs only, wall slide | `3c6426a962ca8e0f42fbd81979e874cce22a5228d118534f4fdfa798c295df2b` |
+| Horizontal wall runs only, wall slide | `893a1c5e70ea80afb6fb30cdab84f7f245df669d1c63073bc1d35247a2a3301a` |
 | Horizontal wall runs only, no wall slide | `ab030994cc2862e6bcd3cf4425b392e63349abcb6aa7a81943ad1b958635feeb` |
 
 If you previously applied an older version of these mods, restore the original exe first (from your

@@ -23,13 +23,15 @@ Changes:
   * Wall slide (optional, the script asks): hold Drop (C by default) for a moment while jumping
     into a wall that allows wall runs, and the Prince slides down it like on a curtain, steered
     left/right with the direction keys. He stops sideways at corners, drops where the wall ends
-    or when C is released, grabs ledges on the way and lands softly. Space jumps off; Special
-    Jump + left/right jumps off at 45 degrees. It uses the curtain animations, so it works from
-    the first area with a curtain onward (the game loads them there; the patch keeps them).
+    or when C is released, grabs ledges on the way and lands softly. He draws his swords as the
+    slide starts, like on a curtain. Space jumps off; Space + left/right jumps off at 45 degrees.
+    Holding C down to the floor no longer throws the secondary weapon. It uses the curtain
+    animations, so it works from the first area with a curtain onward (the game loads them
+    there; the patch keeps them).
     Holding C also starts a slide without touching the wall: after dropping from a ledge or
     when a wall run ends next to a runnable wall. No slide starts when a ledge he can still
     grab is just below, or the floor is less than 1 unit below. If he ever gets stuck after a
-    slide, he lets go after half a second.
+    slide, or a rewind ends mid-slide with C released, he lets go.
   * Code section: the patch adds a 64 KB code section (.mods) for the mods' code; the wall slide
     uses it.
 
@@ -51,8 +53,8 @@ ORIGINAL_SHA256 = "5559117d013155bbad608cedc2fd0dd272f37ed92c936fc4e151287f3b5ff
 PATCHED_SHA256 = {
     (True, False): "89815876a23200f8c3a47a752dae98d4778c2f075b09f1f7ffae740769b32c0b",
     (False, False): "ab030994cc2862e6bcd3cf4425b392e63349abcb6aa7a81943ad1b958635feeb",
-    (True, True): "603d39971f178a6bf3eebb33a8d72c9a804c38d72fe362aef00c76e034a8827c",
-    (False, True): "3c6426a962ca8e0f42fbd81979e874cce22a5228d118534f4fdfa798c295df2b",
+    (True, True): "cf4b50c6089071b69b8a9fd671db2314e5f267ae0a762a8ff17d67f046445f0b",
+    (False, True): "893a1c5e70ea80afb6fb30cdab84f7f245df669d1c63073bc1d35247a2a3301a",
 }
 
 # sha256 -> description of builds produced by earlier versions of this script
@@ -80,6 +82,10 @@ KNOWN_OLDER_BUILDS = {
         "movement patch with vertical wall runs and the first wall slide",
     "5ad99a5088b160a08438f00f92bad4041938aebfb5f8c8116e4e5c825e716258":
         "movement patch with the first wall slide, without vertical wall runs",
+    "603d39971f178a6bf3eebb33a8d72c9a804c38d72fe362aef00c76e034a8827c":
+        "movement patch with vertical wall runs and the second wall slide",
+    "3c6426a962ca8e0f42fbd81979e874cce22a5228d118534f4fdfa798c295df2b":
+        "movement patch with the second wall slide, without vertical wall runs",
 }
 
 # Code caves. Addresses in comments are virtual addresses; file offset = VA - 0x400000.
@@ -476,8 +482,8 @@ MODS_CODE = bytes.fromhex(  # at 0xDC9000 (.mods), wall slide additions
     "DB 00 D8 1D FC A6 8B 00 DF E0 F6 C4 41 0F 85 37 02 00 00 6A 01 FF B6 B8 10 00 00 8D 47 08 50 53"
     "E8 A7 53 95 FF 83 C4 10 83 7F 08 00 0F 84 18 02 00 00 D9 07 D8 A6 14 07 00 00 D8 1D E0 A6 8B 00"
     "DF E0 F6 C4 01 0F 85 FF 01 00 00 D9 07 D8 25 08 FD DB 00 D9 5F 04 8B 47 04 3B 05 F8 A6 8B 00 0F"
-    "82 E5 01 00 00 A1 2C A7 8B 00 E8 A4 05 00 00 0F 84 D5 01 00 00 A1 34 A7 8B 00 E8 94 05 00 00 0F"
-    "84 C5 01 00 00 A1 38 A7 8B 00 E8 84 05 00 00 0F 84 B5 01 00 00 A1 30 A7 8B 00 E8 74 05 00 00 0F"
+    "82 E5 01 00 00 A1 2C A7 8B 00 E8 C1 06 00 00 0F 84 D5 01 00 00 A1 34 A7 8B 00 E8 B1 06 00 00 0F"
+    "84 C5 01 00 00 A1 38 A7 8B 00 E8 A1 06 00 00 0F 84 B5 01 00 00 A1 30 A7 8B 00 E8 91 06 00 00 0F"
     "84 A5 01 00 00 8D 47 0C 50 53 E8 1D 77 6C FF 83 C4 08 C7 47 14 00 00 00 00 8D 47 0C 50 E8 DA 34"
     "6B FF 83 C4 04 8D 47 18 50 53 E8 8D 5B 6C FF 83 C4 08 8B 47 18 89 47 24 8B 47 1C 89 47 28 D9 47"
     "20 D8 05 04 90 DC 00 D9 5F 2C D9 05 00 90 DC 00 D9 C0 D8 4F 0C D9 5F 30 D8 4F 10 D9 5F 34 C7 47"
@@ -519,23 +525,37 @@ MODS_CODE = bytes.fromhex(  # at 0xDC9000 (.mods), wall slide additions
     "E8 A2 19 AF FF 74 43 60 81 EC 94 00 00 00 89 E7 8D 47 18 50 53 E8 1A 58 6C FF 83 C4 08 E8 95 FE"
     "FF FF 85 C0 79 11 E8 4D FF FF FF 73 14 81 C4 94 00 00 00 61 39 C0 C3 81 C4 94 00 00 00 61 39 C0"
     "C3 81 C4 94 00 00 00 61 85 E4 C3"
-    # WATCHDOG, from 0x630160 (per-frame airborne handler): in 0x412, not moving for STUCK
-    # within WIN after a slide -> the slide's fall exit; retried every STUCK; then the
+    # WATCHDOG, from 0x630160 (per-frame airborne handler): draws the sword once per new
+    # slide (fn_SnapSword 0x700EB0, as the curtain); in 0x412 with the slide animation and
+    # no running slide (after a rewind) -> the slide's fall exit; not moving for STUCK
+    # within WIN after a slide -> the same exit, retried every STUCK
+    "60 83 EC 20 89 E7 8B 1D 48 4A D3 00 3B 1D 14 C4 D0 00 0F 85 02 02 00 00 8B 35 40 4A D3 00 8B 76"
+    "48 D9 05 74 09 94 00 D8 25 18 33 CD 00 D9 1F 39 35 00 FD DB 00 75 39 A1 04 FD DB 00 3B 05 3C FD"
+    "DB 00 74 2C D9 07 D8 25 08 FD DB 00 D8 1D FC A6 8B 00 DF E0 F6 C4 41 74 17 A1 04 FD DB 00 A3 3C"
+    "FD DB 00 6A 03 6A 01 53 E8 4C 79 93 FF 83 C4 0C 8D 47 04 50 53 E8 6F 57 6C FF 83 C4 08 81 BE 40"
+    "06 00 00 12 04 00 00 75 79 53 E8 0A E6 6C FF 83 C4 04 3B 05 2C A7 8B 00 75 68 39 35 00 FD DB 00"
+    "75 22 D9 07 D8 25 08 FD DB 00 D9 E4 DF E0 F6 C4 01 75 0F D8 1D FC A6 8B 00 DF E0 F6 C4 41 75 42"
+    "EB 02 DD D8 8D 47 10 50 53 E8 8B 72 6C FF 83 C4 08 D9 47 10 D8 0D 00 A7 8B 00 D9 E0 D9 5F 10 D9"
+    "47 14 D8 0D 00 A7 8B 00 D9 E0 D9 5F 14 D9 05 E4 A6 8B 00 D9 E0 D9 5F 18 E8 2C 01 00 00 E9 F9 00"
+    "00 00 81 BE 40 06 00 00 12 04 00 00 0F 85 E9 00 00 00 D9 07 D8 1D 34 FD DB 00 DF E0 F6 C4 01 0F"
+    "85 D6 00 00 00 31 C9 D9 44 8F 04 D8 24 8D 28 FD DB 00 D9 E1 D8 1D 40 90 DC 00 DF E0 F6 C4 41 0F"
+    "84 B6 00 00 00 41 83 F9 03 72 DC D9 07 D8 25 34 FD DB 00 D8 1D 38 90 DC 00 DF E0 F6 C4 01 0F 85"
+    "B6 00 00 00 D9 07 D8 25 38 FD DB 00 D9 E4 DF E0 F6 C4 01 75 13 D8 1D 38 90 DC 00 DF E0 F6 C4 01"
+    "0F 85 94 00 00 00 EB 02 DD D8 39 35 00 FD DB 00 0F 85 84 00 00 00 D9 07 D8 25 08 FD DB 00 D8 1D"
+    "FC A6 8B 00 DF E0 F6 C4 41 75 6F D9 05 34 FD DB 00 D8 25 08 FD DB 00 D8 1D 3C 90 DC 00 DF E0 F6"
+    "C4 41 74 56 8B 07 A3 38 FD DB 00 D9 05 10 FD DB 00 D8 0D 00 A7 8B 00 D9 5F 10 D9 05 14 FD DB 00"
+    "D8 0D 00 A7 8B 00 D9 5F 14 D9 05 E4 A6 8B 00 D9 E0 D9 5F 18 E8 30 00 00 00 EB 1F 8B 47 04 A3 28"
+    "FD DB 00 8B 47 08 A3 2C FD DB 00 8B 47 0C A3 30 FD DB 00 8B 07 A3 34 FD DB 00 83 C4 20 61 81 EC"
+    "E4 00 00 00 E9 46 6A 86 FF 31 C0 50 6A 0A 6A 50 FF 35 30 A7 8B 00 50 50 6A 2C 53 E8 29 1F 82 FF"
+    "83 C4 20 8D 47 10 50 53 E8 1C 52 84 FF 83 C4 08 8B 47 0C 89 86 04 02 00 00 C7 86 CC 04 00 00 01"
+    "00 00 00 C3"
+    # C_GATE, called instead of IsDown at 0x725D9A (the landing's throw check): C held since
+    # the slide (press time <= last slide frame) counts as not down; then the
     # animation-table helper
-    "60 83 EC 20 89 E7 8B 1D 48 4A D3 00 3B 1D 14 C4 D0 00 0F 85 79 01 00 00 8B 35 40 4A D3 00 8B 76"
-    "48 D9 05 74 09 94 00 D8 25 18 33 CD 00 D9 1F 8D 47 04 50 53 E8 B0 57 6C FF 83 C4 08 81 BE 40 06"
-    "00 00 12 04 00 00 0F 85 26 01 00 00 D9 07 D8 1D 34 FD DB 00 DF E0 F6 C4 01 0F 85 13 01 00 00 31"
-    "C9 D9 44 8F 04 D8 24 8D 28 FD DB 00 D9 E1 D8 1D 40 90 DC 00 DF E0 F6 C4 41 0F 84 F3 00 00 00 41"
-    "83 F9 03 72 DC D9 07 D8 25 34 FD DB 00 D8 1D 38 90 DC 00 DF E0 F6 C4 01 0F 85 F3 00 00 00 D9 07"
-    "D8 25 38 FD DB 00 D9 E4 DF E0 F6 C4 01 75 13 D8 1D 38 90 DC 00 DF E0 F6 C4 01 0F 85 D1 00 00 00"
-    "EB 02 DD D8 39 35 00 FD DB 00 0F 85 C1 00 00 00 D9 07 D8 25 08 FD DB 00 D8 1D FC A6 8B 00 DF E0"
-    "F6 C4 41 0F 85 A8 00 00 00 D9 05 34 FD DB 00 D8 25 08 FD DB 00 D8 1D 3C 90 DC 00 DF E0 F6 C4 41"
-    "0F 84 8B 00 00 00 8B 07 A3 38 FD DB 00 D9 05 10 FD DB 00 D8 0D 00 A7 8B 00 D9 5F 10 D9 05 14 FD"
-    "DB 00 D8 0D 00 A7 8B 00 D9 5F 14 D9 05 E4 A6 8B 00 D9 E0 D9 5F 18 31 C0 50 6A 0A 6A 50 FF 35 30"
-    "A7 8B 00 50 50 6A 2C 53 E8 1C 20 82 FF 83 C4 20 8D 47 10 50 53 E8 0F 53 84 FF 83 C4 08 8B 47 0C"
-    "89 86 04 02 00 00 C7 86 CC 04 00 00 01 00 00 00 EB 1F 8B 47 04 A3 28 FD DB 00 8B 47 08 A3 2C FD"
-    "DB 00 8B 47 0C A3 30 FD DB 00 8B 07 A3 34 FD DB 00 83 C4 20 61 81 EC E4 00 00 00 E9 CF 6A 86 FF"
-    "8B 4B 14 8B 09 8B 49 30 0F B7 11 39 D0 73 06 83 7C 81 08 00 C3 31 C0 C3"
+    "FF 74 24 10 FF 74 24 10 FF 74 24 10 FF 74 24 10 E8 E0 4C 95 FF 83 C4 10 60 8B 5C 24 24 3B 1D 14"
+    "C4 D0 00 75 32 83 7C 24 30 01 75 2B 8B 54 24 28 83 3A 00 74 22 8B 43 18 8B 40 04 8B 40 48 D9 80"
+    "14 07 00 00 D8 1D 08 FD DB 00 DF E0 F6 C4 41 74 06 C7 02 00 00 00 00 61 C3 8B 4B 14 8B 09 8B 49"
+    "30 0F B7 11 39 D0 73 06 83 7C 81 08 00 C3 31 C0 C3"
 )
 
 # (file offset, original bytes, new bytes)
@@ -651,8 +671,8 @@ WALLSLIDE_PATCHES = [
     # PE header, .data VirtualSize 0x4AED00 -> 0x4AEE00 (maps the state at 0xDBFD00..0xDBFD1B,
     # zero-filled, inside the section's last page)
     (0x1D0, bytes.fromhex("00 ED 4A 00"), bytes.fromhex("00 EE 4A 00")),
-    # .mods code at 0xDC9000 (SEARCH, LG_GATE, EDGE_CHECK, FLOOR_CHECK, CE_GATE, WATCHDOG); its state
-    # is at 0xDBFD20..0xDBFD3B, in the .data page mapped above
+    # .mods code at 0xDC9000 (SEARCH, LG_GATE, EDGE_CHECK, FLOOR_CHECK, CE_GATE, WATCHDOG, C_GATE);
+    # its state is at 0xDBFD20..0xDBFD3F, in the .data page mapped above
     (MODS_RAW, b"\xCC" * len(MODS_CODE), MODS_CODE),
     # hooks into it (the contact entry call is inside WALLSLIDE_CAVE, written above)
     # WALLRUN_CAVE 0x8BA135 "no wall contact" je 0x64D797 -> je SEARCH
@@ -663,6 +683,11 @@ WALLSLIDE_PATCHES = [
     (0x4BA804, bytes.fromhex("E8 4A 06 00 00"), bytes.fromhex("E8 A3 EC 50 00")),
     # 0x630160 sub esp,0xe4 (per-frame airborne handler) -> jmp WATCHDOG ; nop
     (0x230160, bytes.fromhex("81 EC E4 00 00 00"), bytes.fromhex("E9 92 93 79 00 90")),
+    # 0x725D9A call IsDown 0x71E450 (C held -> secondary-weapon throw) -> call C_GATE
+    (0x325D9A, bytes.fromhex("E8 B1 86 FF FF"), bytes.fromhex("E8 BC 39 6A 00")),
+    # slide jump exit 0x8bac5c: test byte [0x93F062],1 ; jz (Special Jump test) -> nops,
+    # so Space + a sideways stick jumps off at 45 degrees
+    (0x4BAC5C, bytes.fromhex("F6 05 62 F0 93 00 01 74 67"), bytes.fromhex("90 90 90 90 90 90 90 90 90")),
 ]
 
 
