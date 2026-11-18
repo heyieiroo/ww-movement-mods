@@ -30,7 +30,7 @@ Changes:
     there; the patch keeps them).
     Holding C also starts a slide without touching the wall: after dropping from a ledge or
     when a wall run ends next to a runnable wall. No slide starts when a ledge he can still
-    grab is just below, or the floor is less than 1 unit below. If he ever gets stuck after a
+    grab is just below, or the floor is less than 2 units below. If he ever gets stuck after a
     slide, or a rewind ends mid-slide with C released, he lets go.
   * Code section: the patch adds a 64 KB code section (.mods) for the mods' code; the wall slide
     uses it.
@@ -50,12 +50,14 @@ from pathlib import Path
 
 ORIGINAL_SHA256 = "5559117d013155bbad608cedc2fd0dd272f37ed92c936fc4e151287f3b5ff1cb"
 # sha256 of the output for (vertical wall runs from jumps, wall slide)
+# BEGIN GENERATED patched-sha256 (tools/modbuild.py patcher; do not edit by hand)
 PATCHED_SHA256 = {
     (True, False): "89815876a23200f8c3a47a752dae98d4778c2f075b09f1f7ffae740769b32c0b",
     (False, False): "ab030994cc2862e6bcd3cf4425b392e63349abcb6aa7a81943ad1b958635feeb",
-    (True, True): "cf4b50c6089071b69b8a9fd671db2314e5f267ae0a762a8ff17d67f046445f0b",
-    (False, True): "893a1c5e70ea80afb6fb30cdab84f7f245df669d1c63073bc1d35247a2a3301a",
+    (True, True): "60bfa426763eb7fe6b0c26dfdc06c04043d9be31f58418dd70ea863200b6f77a",
+    (False, True): "3584bc9f35d4506a1ca8439b07c2b3d5b5f9c8faf77170ebd149a2e49c17fc3e",
 }
+# END GENERATED patched-sha256
 
 # sha256 -> description of builds produced by earlier versions of this script
 KNOWN_OLDER_BUILDS = {
@@ -86,6 +88,16 @@ KNOWN_OLDER_BUILDS = {
         "movement patch with vertical wall runs and the second wall slide",
     "3c6426a962ca8e0f42fbd81979e874cce22a5228d118534f4fdfa798c295df2b":
         "movement patch with the second wall slide, without vertical wall runs",
+    # BEGIN GENERATED older-builds (tools/modbuild.py patcher; do not edit by hand)
+    "cf4b50c6089071b69b8a9fd671db2314e5f267ae0a762a8ff17d67f046445f0b":
+        "movement patch with vertical wall runs and the third wall slide",
+    "893a1c5e70ea80afb6fb30cdab84f7f245df669d1c63073bc1d35247a2a3301a":
+        "movement patch with the third wall slide, without vertical wall runs",
+    "408d99fdf309904aaea63436cf33f09aa35576896fd79c803c3f48d3b2585172":
+        "movement patch with vertical wall runs and the fourth wall slide",
+    "aa5ee41ce87359d1ef574a44726c24392c1f524756b456dd6e11687885442d36":
+        "movement patch with the fourth wall slide, without vertical wall runs",
+    # END GENERATED older-builds
 }
 
 # Code caves. Addresses in comments are virtual addresses; file offset = VA - 0x400000.
@@ -466,97 +478,171 @@ WALLSLIDE_CAVE = bytes.fromhex(  # at 0x8BA6E0, jumped to from WALLRUN_CAVE (0x8
     "81 31 C0 40 C3 31 C0 C3 45 A1 40 A7 8B 00 01 C0 39 C5 C3"
 )
 
+# BEGIN GENERATED mods-code (tools/modbuild.py patcher; do not edit by hand)
 MODS_CODE = bytes.fromhex(  # at 0xDC9000 (.mods), wall slide additions
-    # tunables (floats): search REACH 0.9, RZ 1.0, STAND 0.495, NZ 0.3; ledge gate DROP 0.6;
-    # edge check MAXFALL 7.0, CATCH 0.0, DMAX 3.0, TOP 0.5, HX 0.4, HY 0.4; floor check
-    # CLEAR 1.0, FZ 0.5, PROBE 3.0; watchdog STUCK 0.5 s, WIN 1.0 s, EPS 0.002
+    # tunables (from search.s): S_REACH 0.9; S_RZ 1.0; S_STAND 0.495; S_NZ 0.3; LG_DROP 0.6;
+    # E_MAXFALL 7.0; E_CATCH 0.0; E_DMAX 3.0; E_TOP 0.5; E_HX 0.4; E_HY 0.4; F_CLEAR 2.0; F_FZ 0.5;
+    # F_PROBE 3.0; WD_STUCK 0.5; WD_WIN 1.0; WD_EPS 0.002; SW_TAU 0.0, 0.24, 0.61, 1.19, 1.41;
+    # SW_OFF 0.0, 1.96, 3.66, 1.57, 1.80; SW_ANIMS 0x375, 0x371, 0x372, 0x373, 0x374, 0x36E, 0x36F,
+    # 0x370, 0x369, 0x377, 0, 0; SW_HWIN 0.25; SW_VREF 7.4; SW_KMAX 1.2; SW_TURN0 0.24; SW_TURNL
+    # 0.28; SW_PI 3.14159265; SW_HALF 0.5; SW_THREE 3.0; SW_AEND 2.0; SW_EPS 0.0001
     "66 66 66 3F 00 00 80 3F A4 70 FD 3E 9A 99 99 3E 9A 99 19 3F 00 00 E0 40 00 00 00 00 00 00 40 40"
-    "00 00 00 3F CD CC CC 3E CD CC CC 3E 00 00 80 3F 00 00 00 3F 00 00 40 40 00 00 00 3F 00 00 80 3F"
-    "6F 12 03 3B"
+    "00 00 00 3F CD CC CC 3E CD CC CC 3E 00 00 00 40 00 00 00 3F 00 00 40 40 00 00 00 3F 00 00 80 3F"
+    "6F 12 03 3B 00 00 00 00 8F C2 75 3E F6 28 1C 3F EC 51 98 3F E1 7A B4 3F 00 00 00 00 48 E1 FA 3F"
+    "71 3D 6A 40 C3 F5 C8 3F 66 66 E6 3F 75 03 00 00 71 03 00 00 72 03 00 00 73 03 00 00 74 03 00 00"
+    "6E 03 00 00 6F 03 00 00 70 03 00 00 69 03 00 00 77 03 00 00 00 00 00 00 00 00 00 00 00 00 80 3E"
+    "CD CC EC 40 9A 99 99 3F 8F C2 75 3E 29 5C 8F 3E DB 0F 49 40 00 00 00 3F 00 00 40 40 00 00 00 40"
+    "17 B7 D1 38"
     # SEARCH, from WALLRUN_CAVE 0x8BA135 on frames without wall contact: with C held for HOLD,
-    # the cooldown passed and the curtain animations loaded, one ray along the facing; a
-    # near-vertical runnable wall within REACH, faced within 60 degrees, and no catchable
-    # ledge or close floor below -> snap to STAND from it, velocity 0, slide state set
-    "60 81 EC 94 00 00 00 89 E7 8B 1D 48 4A D3 00 3B 1D 14 C4 D0 00 0F 85 6F 02 00 00 8B 35 40 4A D3"
+    # the cooldown passed and the curtain animations loaded, a ray along the facing (and, in a
+    # fall straight from a horizontal run, to his right and left); a near-vertical runnable
+    # wall within REACH and no catchable ledge or close floor below -> snap to STAND from it,
+    # velocity 0, slide state set
+    "60 81 EC A0 00 00 00 89 E7 8B 1D 48 4A D3 00 3B 1D 14 C4 D0 00 0F 85 AC 02 00 00 8B 35 40 4A D3"
     "00 8B 76 48 D9 05 74 09 94 00 D8 25 18 33 CD 00 D9 1F 39 35 00 FD DB 00 75 19 D9 07 D8 25 08 FD"
-    "DB 00 D8 1D FC A6 8B 00 DF E0 F6 C4 41 0F 85 37 02 00 00 6A 01 FF B6 B8 10 00 00 8D 47 08 50 53"
-    "E8 A7 53 95 FF 83 C4 10 83 7F 08 00 0F 84 18 02 00 00 D9 07 D8 A6 14 07 00 00 D8 1D E0 A6 8B 00"
-    "DF E0 F6 C4 01 0F 85 FF 01 00 00 D9 07 D8 25 08 FD DB 00 D9 5F 04 8B 47 04 3B 05 F8 A6 8B 00 0F"
-    "82 E5 01 00 00 A1 2C A7 8B 00 E8 C1 06 00 00 0F 84 D5 01 00 00 A1 34 A7 8B 00 E8 B1 06 00 00 0F"
-    "84 C5 01 00 00 A1 38 A7 8B 00 E8 A1 06 00 00 0F 84 B5 01 00 00 A1 30 A7 8B 00 E8 91 06 00 00 0F"
-    "84 A5 01 00 00 8D 47 0C 50 53 E8 1D 77 6C FF 83 C4 08 C7 47 14 00 00 00 00 8D 47 0C 50 E8 DA 34"
-    "6B FF 83 C4 04 8D 47 18 50 53 E8 8D 5B 6C FF 83 C4 08 8B 47 18 89 47 24 8B 47 1C 89 47 28 D9 47"
-    "20 D8 05 04 90 DC 00 D9 5F 2C D9 05 00 90 DC 00 D9 C0 D8 4F 0C D9 5F 30 D8 4F 10 D9 5F 34 C7 47"
-    "38 00 00 00 00 6A 01 6A 00 6A 00 6A FF 8D 47 30 50 8D 47 24 50 53 E8 D1 8E 6D FF 83 C4 1C 85 C0"
-    "0F 84 24 01 00 00 8D 47 3C 50 53 E8 BC 95 6D FF 83 C4 08 8D 47 48 50 53 E8 4F 96 6D FF 83 C4 08"
-    "68 FF FF 00 00 53 E8 01 6F 6D FF 83 C4 08 A9 00 00 03 00 0F 85 F1 00 00 00 D9 47 50 D9 E1 D8 1D"
-    "0C 90 DC 00 DF E0 F6 C4 41 0F 84 DB 00 00 00 8D 47 48 50 E8 24 34 6B FF 83 C4 04 D9 47 0C D8 4F"
-    "48 D9 47 10 D8 4F 4C DE C1 D9 E0 D8 1D F4 A6 8B 00 DF E0 F6 C4 01 0F 85 AE 00 00 00 E8 3E 01 00"
-    "00 85 C0 79 0C E8 F6 01 00 00 73 0A E9 99 00 00 00 E9 94 00 00 00 D9 05 08 90 DC 00 D9 C0 D8 4F"
-    "48 D8 47 3C D9 5F 18 D8 4F 4C D8 47 40 D9 5F 1C 8D 47 18 50 53 E8 52 5D 6C FF 83 C4 08 31 C0 89"
-    "47 3C 89 47 40 89 47 44 8D 47 3C 50 53 E8 EA 56 84 FF 83 C4 08 89 35 00 FD DB 00 8B 07 A3 04 FD"
-    "DB 00 A3 08 FD DB 00 A3 0C FD DB 00 31 C0 89 86 2C 03 00 00 89 86 30 03 00 00 89 86 34 03 00 00"
-    "8B 47 48 A3 10 FD DB 00 8B 47 4C A3 14 FD DB 00 C7 05 18 FD DB 00 00 00 00 00 8B 07 A3 20 FD DB"
-    "00 8B 47 20 A3 24 FD DB 00 90 81 C4 94 00 00 00 61 E9 72 14 AF FF"
+    "DB 00 D8 1D FC A6 8B 00 DF E0 F6 C4 41 0F 85 74 02 00 00 6A 01 FF B6 B8 10 00 00 8D 47 08 50 53"
+    "E8 27 53 95 FF 83 C4 10 83 7F 08 00 0F 84 55 02 00 00 D9 07 D8 A6 14 07 00 00 D8 1D E0 A6 8B 00"
+    "DF E0 F6 C4 01 0F 85 3C 02 00 00 D9 07 D8 25 08 FD DB 00 D9 5F 04 8B 47 04 3B 05 F8 A6 8B 00 0F"
+    "82 22 02 00 00 A1 2C A7 8B 00 E8 06 0D 00 00 0F 84 12 02 00 00 A1 34 A7 8B 00 E8 F6 0C 00 00 0F"
+    "84 02 02 00 00 A1 38 A7 8B 00 E8 E6 0C 00 00 0F 84 F2 01 00 00 A1 30 A7 8B 00 E8 D6 0C 00 00 0F"
+    "84 E2 01 00 00 8D 47 0C 50 53 E8 9D 76 6C FF 83 C4 08 C7 47 14 00 00 00 00 8D 47 0C 50 E8 5A 34"
+    "6B FF 83 C4 04 8D 47 18 50 53 E8 0D 5B 6C FF 83 C4 08 C7 87 9C 00 00 00 00 00 00 00 8B 47 0C 89"
+    "87 94 00 00 00 8B 47 10 89 87 98 00 00 00 E8 72 03 00 00 75 62 39 35 40 FD DB 00 0F 85 86 01 00"
+    "00 C7 87 9C 00 00 00 01 00 00 00 8B 47 10 89 87 94 00 00 00 D9 47 0C D9 E0 D9 9F 98 00 00 00 E8"
+    "41 03 00 00 75 31 C7 87 9C 00 00 00 02 00 00 00 D9 87 94 00 00 00 D9 E0 D9 9F 94 00 00 00 D9 87"
+    "98 00 00 00 D9 E0 D9 9F 98 00 00 00 E8 14 03 00 00 0F 84 30 01 00 00 E8 C0 01 00 00 85 C0 79 0C"
+    "E8 78 02 00 00 73 0A E9 1B 01 00 00 E9 16 01 00 00 D9 05 08 90 DC 00 D9 C0 D8 4F 48 D8 47 3C D9"
+    "5F 18 D8 4F 4C D8 47 40 D9 5F 1C 8D 47 18 50 53 E8 17 5D 6C FF 83 C4 08 83 BF 9C 00 00 00 00 74"
+    "79 8D 47 3C 50 53 E8 D1 E6 6D FF 83 C4 08 D9 47 3C D8 4F 4C D9 E0 D9 47 40 D8 4F 48 DE C1 D8 35"
+    "A0 90 DC 00 D9 C0 D9 E1 D8 1D A4 90 DC 00 DF E0 F6 C4 41 75 13 D9 E4 DF E0 DD D8 D9 05 A4 90 DC"
+    "00 F6 C4 01 74 02 D9 E0 D9 1D 4C FD DB 00 8B 07 A3 48 FD DB 00 C7 05 58 FD DB 00 00 00 00 00 C7"
+    "05 5C FD DB 00 00 00 00 00 31 C0 83 BF 9C 00 00 00 01 0F 94 C0 A3 60 FD DB 00 31 C0 89 47 3C 89"
+    "47 40 89 47 44 8D 47 3C 50 53 E8 2D 56 84 FF 83 C4 08 89 35 00 FD DB 00 8B 07 A3 04 FD DB 00 A3"
+    "08 FD DB 00 A3 0C FD DB 00 31 C0 89 86 2C 03 00 00 89 86 30 03 00 00 89 86 34 03 00 00 8B 47 48"
+    "A3 10 FD DB 00 8B 47 4C A3 14 FD DB 00 C7 05 18 FD DB 00 00 00 00 00 8B 07 A3 20 FD DB 00 8B 47"
+    "20 A3 24 FD DB 00 90 81 C4 A0 00 00 00 61 E9 B5 13 AF FF"
     # LG_GATE, from 0x64CD81: skips the vanilla ledge probe during a search-started slide until
     # he is DROP below its start (no re-grab of the ledge he dropped from)
     "60 83 EC 10 8B 1D 48 4A D3 00 3B 1D 14 C4 D0 00 75 69 8B 35 40 4A D3 00 8B 76 48 39 35 00 FD DB"
     "00 75 58 A1 04 FD DB 00 3B 05 20 FD DB 00 75 4B D9 05 74 09 94 00 D8 25 18 33 CD 00 D8 25 08 FD"
-    "DB 00 D8 1D FC A6 8B 00 DF E0 F6 C4 41 74 2C 89 E0 50 53 E8 AE 59 6C FF 83 C4 08 D9 05 24 FD DB"
-    "00 D8 64 24 08 D8 1D 10 90 DC 00 DF E0 F6 C4 01 74 09 83 C4 10 61 E9 4B 3A 88 FF 83 C4 10 61 A1"
-    "48 4A D3 00 E9 23 3A 88 FF"
+    "DB 00 D8 1D FC A6 8B 00 DF E0 F6 C4 41 74 2C 89 E0 50 53 E8 F1 58 6C FF 83 C4 08 D9 05 24 FD DB"
+    "00 D8 64 24 08 D8 1D 10 90 DC 00 DF E0 F6 C4 01 74 09 83 C4 10 61 E9 8E 39 88 FF 83 C4 10 61 A1"
+    "48 4A D3 00 E9 66 39 88 FF"
     # EDGE_CHECK: box query below the feet (vanilla ledge edges, mask 0x4FF40F), depth
     # min(DMAX, MAXFALL - fallen - CATCH); an edge found -> no slide
     "C7 47 70 FE FF FF FF D9 86 04 02 00 00 D8 67 20 D8 2D 14 90 DC 00 D8 25 18 90 DC 00 D9 05 1C 90"
     "DC 00 D8 D1 DF E0 F6 C4 01 74 04 DD D9 EB 02 DD D8 D9 57 54 D9 E4 DF E0 DD D8 F6 C4 41 75 7E D9"
     "05 24 90 DC 00 D9 57 64 D9 E0 D9 5F 58 D9 05 28 90 DC 00 D9 57 68 D9 E0 D9 5F 5C D9 47 54 D9 E0"
-    "D9 5F 60 A1 20 90 DC 00 89 47 6C 8D 47 64 50 8D 47 58 50 6A 00 53 E8 D2 4B 6D FF 83 C4 10 68 0F"
-    "F4 4F 00 6A 01 8D 47 18 50 6A 00 E8 7D 4D 6D FF 83 C4 10 89 47 70 85 C0 78 23 50 6A 00 E8 3B 4D"
-    "6D FF 83 C4 08 89 47 74 8D 47 78 50 8D 47 18 50 FF 77 70 6A 00 E8 23 4E 6D FF 83 C4 10 8B 47 70"
+    "D9 5F 60 A1 20 90 DC 00 89 47 6C 8D 47 64 50 8D 47 58 50 6A 00 53 E8 15 4B 6D FF 83 C4 10 68 0F"
+    "F4 4F 00 6A 01 8D 47 18 50 6A 00 E8 C0 4C 6D FF 83 C4 10 89 47 70 85 C0 78 23 50 6A 00 E8 7E 4C"
+    "6D FF 83 C4 08 89 47 74 8D 47 78 50 8D 47 18 50 FF 77 70 6A 00 E8 66 4D 6D FF 83 C4 10 8B 47 70"
     "C3"
     # FLOOR_CHECK: ray straight down; floor closer than CLEAR below the feet -> no slide
     "8B 47 18 89 47 24 8B 47 1C 89 47 28 D9 47 20 D8 05 30 90 DC 00 D9 5F 2C 31 C0 89 47 30 89 47 34"
     "D9 05 30 90 DC 00 D8 05 34 90 DC 00 D9 E0 D9 5F 38 A1 34 90 DC 00 89 87 84 00 00 00 6A 01 6A 00"
-    "6A 00 6A FF 8D 47 30 50 8D 47 24 50 53 E8 FA 8B 6D FF 83 C4 1C 85 C0 74 1F 8D 87 88 00 00 00 50"
-    "53 E8 E6 92 6D FF 83 C4 08 D9 47 20 D8 A7 90 00 00 00 D9 9F 84 00 00 00 D9 87 84 00 00 00 D8 1D"
-    "2C 90 DC 00 DF E0 9E C3"
-    # CE_GATE, called from the slide's contact entry (0x8BA804): animation check, then the edge
-    # and floor checks
-    "E8 A2 19 AF FF 74 43 60 81 EC 94 00 00 00 89 E7 8D 47 18 50 53 E8 1A 58 6C FF 83 C4 08 E8 95 FE"
-    "FF FF 85 C0 79 11 E8 4D FF FF FF 73 14 81 C4 94 00 00 00 61 39 C0 C3 81 C4 94 00 00 00 61 39 C0"
-    "C3 81 C4 94 00 00 00 61 85 E4 C3"
+    "6A 00 6A FF 8D 47 30 50 8D 47 24 50 53 E8 3D 8B 6D FF 83 C4 1C 85 C0 74 1F 8D 87 88 00 00 00 50"
+    "53 E8 29 92 6D FF 83 C4 08 D9 47 20 D8 A7 90 00 00 00 D9 9F 84 00 00 00 D9 87 84 00 00 00 D8 1D"
+    "2C 90 DC 00 DF E0 9E C3 8B 47 18 89 47 24 8B 47 1C 89 47 28 D9 47 20 D8 05 04 90 DC 00 D9 5F 2C"
+    "D9 05 00 90 DC 00 D9 C0 D8 8F 94 00 00 00 D9 5F 30 D8 8F 98 00 00 00 D9 5F 34 C7 47 38 00 00 00"
+    "00 6A 01 6A 00 6A 00 6A FF 8D 47 30 50 8D 47 24 50 53 E8 B8 8A 6D FF 83 C4 1C 85 C0 74 78 8D 47"
+    "3C 50 53 E8 A7 91 6D FF 83 C4 08 8D 47 48 50 53 E8 3A 92 6D FF 83 C4 08 68 FF FF 00 00 53 E8 EC"
+    "6A 6D FF 83 C4 08 A9 00 00 03 00 75 49 D9 47 50 D9 E1 D8 1D 0C 90 DC 00 DF E0 F6 C4 41 74 37 8D"
+    "47 48 50 E8 17 30 6B FF 83 C4 04 D9 87 94 00 00 00 D8 4F 48 D9 87 98 00 00 00 D8 4F 4C DE C1 D9"
+    "E0 D8 1D F4 A6 8B 00 DF E0 F6 C4 01 75 08 B8 01 00 00 00 85 C0 C3 31 C0 C3"
+    # CE_GATE, called from the slide's contact entry: animation check, then the edge and
+    # floor checks
+    "E8 14 18 AF FF 74 43 60 81 EC A0 00 00 00 89 E7 8D 47 18 50 53 E8 8C 56 6C FF 83 C4 08 E8 C4 FD"
+    "FF FF 85 C0 79 11 E8 7C FE FF FF 73 14 81 C4 A0 00 00 00 61 39 C0 C3 81 C4 A0 00 00 00 61 39 C0"
+    "C3 81 C4 A0 00 00 00 61 85 E4 C3"
     # WATCHDOG, from 0x630160 (per-frame airborne handler): draws the sword once per new
-    # slide (fn_SnapSword 0x700EB0, as the curtain); in 0x412 with the slide animation and
-    # no running slide (after a rewind) -> the slide's fall exit; not moving for STUCK
-    # within WIN after a slide -> the same exit, retried every STUCK
-    "60 83 EC 20 89 E7 8B 1D 48 4A D3 00 3B 1D 14 C4 D0 00 0F 85 02 02 00 00 8B 35 40 4A D3 00 8B 76"
-    "48 D9 05 74 09 94 00 D8 25 18 33 CD 00 D9 1F 39 35 00 FD DB 00 75 39 A1 04 FD DB 00 3B 05 3C FD"
-    "DB 00 74 2C D9 07 D8 25 08 FD DB 00 D8 1D FC A6 8B 00 DF E0 F6 C4 41 74 17 A1 04 FD DB 00 A3 3C"
-    "FD DB 00 6A 03 6A 01 53 E8 4C 79 93 FF 83 C4 0C 8D 47 04 50 53 E8 6F 57 6C FF 83 C4 08 81 BE 40"
-    "06 00 00 12 04 00 00 75 79 53 E8 0A E6 6C FF 83 C4 04 3B 05 2C A7 8B 00 75 68 39 35 00 FD DB 00"
-    "75 22 D9 07 D8 25 08 FD DB 00 D9 E4 DF E0 F6 C4 01 75 0F D8 1D FC A6 8B 00 DF E0 F6 C4 41 75 42"
-    "EB 02 DD D8 8D 47 10 50 53 E8 8B 72 6C FF 83 C4 08 D9 47 10 D8 0D 00 A7 8B 00 D9 E0 D9 5F 10 D9"
-    "47 14 D8 0D 00 A7 8B 00 D9 E0 D9 5F 14 D9 05 E4 A6 8B 00 D9 E0 D9 5F 18 E8 2C 01 00 00 E9 F9 00"
-    "00 00 81 BE 40 06 00 00 12 04 00 00 0F 85 E9 00 00 00 D9 07 D8 1D 34 FD DB 00 DF E0 F6 C4 01 0F"
-    "85 D6 00 00 00 31 C9 D9 44 8F 04 D8 24 8D 28 FD DB 00 D9 E1 D8 1D 40 90 DC 00 DF E0 F6 C4 41 0F"
-    "84 B6 00 00 00 41 83 F9 03 72 DC D9 07 D8 25 34 FD DB 00 D8 1D 38 90 DC 00 DF E0 F6 C4 01 0F 85"
-    "B6 00 00 00 D9 07 D8 25 38 FD DB 00 D9 E4 DF E0 F6 C4 01 75 13 D8 1D 38 90 DC 00 DF E0 F6 C4 01"
-    "0F 85 94 00 00 00 EB 02 DD D8 39 35 00 FD DB 00 0F 85 84 00 00 00 D9 07 D8 25 08 FD DB 00 D8 1D"
-    "FC A6 8B 00 DF E0 F6 C4 41 75 6F D9 05 34 FD DB 00 D8 25 08 FD DB 00 D8 1D 3C 90 DC 00 DF E0 F6"
-    "C4 41 74 56 8B 07 A3 38 FD DB 00 D9 05 10 FD DB 00 D8 0D 00 A7 8B 00 D9 5F 10 D9 05 14 FD DB 00"
-    "D8 0D 00 A7 8B 00 D9 5F 14 D9 05 E4 A6 8B 00 D9 E0 D9 5F 18 E8 30 00 00 00 EB 1F 8B 47 04 A3 28"
-    "FD DB 00 8B 47 08 A3 2C FD DB 00 8B 47 0C A3 30 FD DB 00 8B 07 A3 34 FD DB 00 83 C4 20 61 81 EC"
-    "E4 00 00 00 E9 46 6A 86 FF 31 C0 50 6A 0A 6A 50 FF 35 30 A7 8B 00 50 50 6A 2C 53 E8 29 1F 82 FF"
-    "83 C4 20 8D 47 10 50 53 E8 1C 52 84 FF 83 C4 08 8B 47 0C 89 86 04 02 00 00 C7 86 CC 04 00 00 01"
-    "00 00 00 C3"
+    # slide (fn_SnapSword 0x700EB0, as the curtain); marks falls straight from a horizontal
+    # run (side rays allowed); in 0x412 with the slide animation and no running slide (after
+    # a rewind) -> the slide's fall exit; not moving for STUCK within WIN after a slide -> the
+    # same exit, retried every STUCK
+    "60 83 EC 20 89 E7 8B 1D 48 4A D3 00 3B 1D 14 C4 D0 00 0F 85 6F 02 00 00 8B 35 40 4A D3 00 8B 76"
+    "48 D9 05 74 09 94 00 D8 25 18 33 CD 00 D9 1F 8B 86 40 06 00 00 3D 20 04 00 00 75 17 39 35 40 FD"
+    "DB 00 74 07 8B 07 A3 44 FD DB 00 89 35 40 FD DB 00 EB 11 3D 12 04 00 00 74 0A C7 05 40 FD DB 00"
+    "00 00 00 00 39 35 00 FD DB 00 75 43 A1 04 FD DB 00 3B 05 3C FD DB 00 74 36 D9 07 D8 25 08 FD DB"
+    "00 D8 1D FC A6 8B 00 DF E0 F6 C4 41 74 21 A1 04 FD DB 00 A3 3C FD DB 00 C7 05 40 FD DB 00 00 00"
+    "00 00 6A 03 6A 01 53 E8 7F 77 93 FF 83 C4 0C 8D 47 04 50 53 E8 A2 55 6C FF 83 C4 08 81 BE 40 06"
+    "00 00 12 04 00 00 0F 85 A3 00 00 00 53 E8 39 E4 6C FF 83 C4 04 3B 05 2C A7 8B 00 74 2A 3D 74 03"
+    "00 00 74 23 3D 69 03 00 00 74 1C 3D 77 03 00 00 74 15 3D 75 03 00 00 74 0E 3D 6E 03 00 00 72 6F"
+    "3D 73 03 00 00 77 68 39 35 00 FD DB 00 75 22 D9 07 D8 25 08 FD DB 00 D9 E4 DF E0 F6 C4 01 75 0F"
+    "D8 1D FC A6 8B 00 DF E0 F6 C4 41 75 42 EB 02 DD D8 8D 47 10 50 53 E8 90 70 6C FF 83 C4 08 D9 47"
+    "10 D8 0D 00 A7 8B 00 D9 E0 D9 5F 10 D9 47 14 D8 0D 00 A7 8B 00 D9 E0 D9 5F 14 D9 05 E4 A6 8B 00"
+    "D9 E0 D9 5F 18 E8 2C 01 00 00 E9 F9 00 00 00 81 BE 40 06 00 00 12 04 00 00 0F 85 E9 00 00 00 D9"
+    "07 D8 1D 34 FD DB 00 DF E0 F6 C4 01 0F 85 D6 00 00 00 31 C9 D9 44 8F 04 D8 24 8D 28 FD DB 00 D9"
+    "E1 D8 1D 40 90 DC 00 DF E0 F6 C4 41 0F 84 B6 00 00 00 41 83 F9 03 72 DC D9 07 D8 25 34 FD DB 00"
+    "D8 1D 38 90 DC 00 DF E0 F6 C4 01 0F 85 B6 00 00 00 D9 07 D8 25 38 FD DB 00 D9 E4 DF E0 F6 C4 01"
+    "75 13 D8 1D 38 90 DC 00 DF E0 F6 C4 01 0F 85 94 00 00 00 EB 02 DD D8 39 35 00 FD DB 00 0F 85 84"
+    "00 00 00 D9 07 D8 25 08 FD DB 00 D8 1D FC A6 8B 00 DF E0 F6 C4 41 75 6F D9 05 34 FD DB 00 D8 25"
+    "08 FD DB 00 D8 1D 3C 90 DC 00 DF E0 F6 C4 41 74 56 8B 07 A3 38 FD DB 00 D9 05 10 FD DB 00 D8 0D"
+    "00 A7 8B 00 D9 5F 10 D9 05 14 FD DB 00 D8 0D 00 A7 8B 00 D9 5F 14 D9 05 E4 A6 8B 00 D9 E0 D9 5F"
+    "18 E8 30 00 00 00 EB 1F 8B 47 04 A3 28 FD DB 00 8B 47 08 A3 2C FD DB 00 8B 47 0C A3 30 FD DB 00"
+    "8B 07 A3 34 FD DB 00 83 C4 20 61 81 EC E4 00 00 00 E9 4B 68 86 FF 31 C0 50 6A 0A 6A 50 FF 35 30"
+    "A7 8B 00 50 50 6A 2C 53 E8 2E 1D 82 FF 83 C4 20 8D 47 10 50 53 E8 21 50 84 FF 83 C4 08 8B 47 0C"
+    "89 86 04 02 00 00 C7 86 CC 04 00 00 01 00 00 00 C3"
     # C_GATE, called instead of IsDown at 0x725D9A (the landing's throw check): C held since
     # the slide (press time <= last slide frame) counts as not down; then the
     # animation-table helper
-    "FF 74 24 10 FF 74 24 10 FF 74 24 10 FF 74 24 10 E8 E0 4C 95 FF 83 C4 10 60 8B 5C 24 24 3B 1D 14"
+    "FF 74 24 10 FF 74 24 10 FF 74 24 10 FF 74 24 10 E8 E5 4A 95 FF 83 C4 10 60 8B 5C 24 24 3B 1D 14"
     "C4 D0 00 75 32 83 7C 24 30 01 75 2B 8B 54 24 28 83 3A 00 74 22 8B 43 18 8B 40 04 8B 40 48 D9 80"
-    "14 07 00 00 D8 1D 08 FD DB 00 DF E0 F6 C4 41 74 06 C7 02 00 00 00 00 61 C3 8B 4B 14 8B 09 8B 49"
-    "30 0F B7 11 39 D0 73 06 83 7C 81 08 00 C3 31 C0 C3"
+    "14 07 00 00 D8 1D 08 FD DB 00 DF E0 F6 C4 41 74 06 C7 02 00 00 00 00 61 C3"
+    # RUN_CUT, from the horizontal run's continue branch 0x590FED: C pressed during the run
+    # and held for HOLD -> start-fall with the run's velocity (the search then starts a slide
+    # with the side rays)
+    "60 83 EC 10 8B 1D 48 4A D3 00 3B 1D 14 C4 D0 00 0F 85 A1 00 00 00 39 35 40 FD DB 00 0F 85 95 00"
+    "00 00 6A 01 FF B6 B8 10 00 00 8D 44 24 08 50 53 E8 6C 4A 95 FF 83 C4 10 83 3C 24 00 74 79 D9 86"
+    "14 07 00 00 D8 1D 44 FD DB 00 DF E0 F6 C4 01 75 66 D9 05 74 09 94 00 D8 25 18 33 CD 00 D8 A6 14"
+    "07 00 00 D8 1D E0 A6 8B 00 DF E0 F6 C4 01 75 47 A1 2C A7 8B 00 E8 50 04 00 00 74 3B 8D 44 24 04"
+    "50 53 E8 4A DF 6D FF 83 C4 08 31 C0 50 6A 0A 6A 50 6A 2C 50 50 6A 2C 53 E8 14 1C 82 FF 83 C4 20"
+    "8D 44 24 04 50 53 E8 06 4F 84 FF 83 C4 08 83 C4 10 61 E9 31 76 7C FF 83 C4 10 61 E9 8A 8D 7C FF"
+    "83 3D 60 FD DB 00 02 74 34 A1 04 FD DB 00 3B 05 48 FD DB 00 75 27 D9 47 4C D8 25 04 FD DB 00 D9"
+    "E4 DF E0 F6 C4 01 75 13 D8 15 54 90 DC 00 DF E0 F6 C4 01 74 06 B8 01 00 00 00 C3 DD D8 31 C0 C3"
+    "D9 E4 DF E0 F6 C4 01 74 05 DD D8 D9 EE C3 31 C9 D9 04 8D 48 90 DC 00 DF F1 77 0F 41 83 F9 04 72"
+    "EF DD D8 D9 05 68 90 DC 00 C3 D8 24 8D 44 90 DC 00 D9 04 8D 48 90 DC 00 D8 24 8D 44 90 DC 00 D9"
+    "1D 54 FD DB 00 D8 35 54 FD DB 00 D8 0D B0 90 DC 00 D9 FF D8 0D B4 90 DC 00 D9 E0 D8 05 B4 90 DC"
+    "00 D9 04 8D 5C 90 DC 00 D8 24 8D 58 90 DC 00 DE C9 D8 04 8D 58 90 DC 00 C3"
+    # SW_ANIM, called from the slide frame's animation block: the curtain's entry animations
+    # in order (sway: grab, settle, swing, swing, mirrored for a wall on his right; head-on:
+    # grab 0x369, then 0x377), each advanced when it ends, then the slide animation
+    "60 83 EC 0C A1 04 FD DB 00 3B 05 48 FD DB 00 0F 84 8A 00 00 00 D9 47 4C D8 25 04 FD DB 00 D9 E4"
+    "DF E0 F6 C4 01 75 71 D8 1D 9C 90 DC 00 DF E0 F6 C4 01 0F 84 F7 00 00 00 A1 04 FD DB 00 A3 48 FD"
+    "DB 00 C7 05 60 FD DB 00 02 00 00 00 C7 05 4C FD DB 00 00 00 00 00 C7 05 5C FD DB 00 00 00 00 00"
+    "C7 05 58 FD DB 00 00 00 00 00 53 E8 F8 DF 6C FF 83 C4 04 3B 05 2C A7 8B 00 74 0E 3D 69 03 00 00"
+    "74 07 3D 77 03 00 00 75 16 C7 05 58 FD DB 00 04 00 00 00 E9 97 00 00 00 DD D8 E9 90 00 00 00 D9"
+    "47 4C D8 25 04 FD DB 00 D8 1D BC 90 DC 00 DF E0 F6 C4 01 74 7A 8B 0D 58 FD DB 00 83 F9 04 73 6F"
+    "A1 60 FD DB 00 8D 04 81 8B 04 85 6C 90 DC 00 85 C0 74 21 50 E8 78 02 00 00 58 74 18 50 53 E8 85"
+    "DF 6C FF 83 C4 04 59 39 C8 74 29 83 3D 5C FD DB 00 00 74 12 FF 05 58 FD DB 00 C7 05 5C FD DB 00"
+    "00 00 00 00 EB AF C7 05 5C FD DB 00 01 00 00 00 89 C8 EB 20 31 C0 89 04 24 89 44 24 04 89 44 24"
+    "08 89 E0 50 53 E8 0E 4D 84 FF 83 C4 08 EB 3F A1 2C A7 8B 00 50 53 E8 2D DF 6C FF 83 C4 04 59 39"
+    "C8 74 2B 51 53 E8 DE 58 84 FF 83 C4 08 3B 0D 2C A7 8B 00 74 19 31 C0 89 04 24 89 44 24 04 89 44"
+    "24 08 89 E0 50 53 E8 CD 4C 84 FF 83 C4 08 83 C4 0C 61 C3"
+    # SW_FACE, called instead of the slide frame's face-the-wall: during a sway the facing
+    # turns from the run direction to the wall between TURN0 and TURN0 + TURNL
+    "E8 3D 11 AF FF 60 83 EC 18 E8 C6 FD FF FF 85 C0 0F 84 B3 00 00 00 D8 25 A8 90 DC 00 D8 35 AC 90"
+    "DC 00 D9 E8 DF F1 0F 86 9B 00 00 00 D9 EE DF F1 72 04 DD D8 D9 EE D9 C0 D8 C0 D8 2D B8 90 DC 00"
+    "D8 C9 DE C9 D9 1D 50 FD DB 00 A1 4C FD DB 00 A9 FF FF FF 7F 74 73 D9 47 04 D9 E0 D9 07 85 C0 79"
+    "08 D9 E0 D9 C9 D9 E0 D9 C9 D9 47 04 D9 E0 D8 E1 D8 0D 50 FD DB 00 D8 C1 D9 5C 24 04 DD D8 D9 07"
+    "D9 E0 D8 E1 D8 0D 50 FD DB 00 D8 C1 D9 1C 24 DD D8 31 C0 89 44 24 08 89 44 24 0C 89 44 24 10 C7"
+    "44 24 14 00 00 80 3F 89 E0 50 E8 D6 28 6B FF 83 C4 04 8D 44 24 0C 50 8D 44 24 04 50 53 E8 43 65"
+    "6C FF 83 C4 0C EB 02 DD D8 83 C4 18 61 C3"
+    # SW_S, from the slide frame's sideways step: during a sway the step follows the curtain's
+    # swing curve (offsets OFF at times TAU, scaled by the run speed), velocity zeroed
+    "51 52 E8 FF FC FF FF 85 C0 75 0C 5A 59 D9 EE D9 5F 50 E9 9C 0C AF FF DD D8 85 ED 74 73 D9 47 4C"
+    "D8 25 04 FD DB 00 E8 1B FD FF FF D9 1D 50 FD DB 00 D9 87 50 01 00 00 D8 25 04 FD DB 00 E8 04 FD"
+    "FF FF D8 2D 50 FD DB 00 D8 0D 4C FD DB 00 D9 05 F0 A6 8B 00 D8 8F 44 01 00 00 D9 C0 D9 E1 D8 1D"
+    "C0 90 DC 00 DF E0 F6 C4 41 75 21 D9 1D 50 FD DB 00 D8 35 50 FD DB 00 D9 57 50 D9 E4 DF E0 DD D8"
+    "F6 C4 40 75 0B 5A 59 E9 71 0C AF FF DD D8 DD D8 D9 EE D9 5F 50 5A 59 E9 F1 0C AF FF"
+    # JUMP_GATE, called instead of the slide's Space test: no jump until the entry animations
+    # have played (as the curtain); a press in the last JWIN of them still counts
+    "8B 0D 48 FD DB 00 D9 47 4C D8 25 04 FD DB 00 D9 E4 DF E0 F6 C4 01 75 55 3B 0D 04 FD DB 00 74 12"
+    "D8 1D 9C 90 DC 00 DF E0 F6 C4 01 75 35 E9 89 B2 93 FF D8 1D BC 90 DC 00 DF E0 F6 C4 01 0F 84 78"
+    "B2 93 FF B8 01 00 00 00 83 3D 60 FD DB 00 02 75 05 B8 02 00 00 00 39 05 58 FD DB 00 0F 83 59 B2"
+    "93 FF 8B 44 24 08 C7 00 00 00 00 00 C3 DD D8 E9 47 B2 93 FF 8B 4B 14 8B 09 8B 49 30 0F B7 11 39"
+    "D0 73 06 83 7C 81 08 00 C3 31 C0 C3"
 )
+# END GENERATED mods-code
 
 # (file offset, original bytes, new bytes)
 PATCHES = [
@@ -671,23 +757,37 @@ WALLSLIDE_PATCHES = [
     # PE header, .data VirtualSize 0x4AED00 -> 0x4AEE00 (maps the state at 0xDBFD00..0xDBFD1B,
     # zero-filled, inside the section's last page)
     (0x1D0, bytes.fromhex("00 ED 4A 00"), bytes.fromhex("00 EE 4A 00")),
-    # .mods code at 0xDC9000 (SEARCH, LG_GATE, EDGE_CHECK, FLOOR_CHECK, CE_GATE, WATCHDOG, C_GATE);
-    # its state is at 0xDBFD20..0xDBFD3F, in the .data page mapped above
+    # BEGIN GENERATED mods-hooks (tools/modbuild.py patcher; do not edit by hand)
+    # .mods code at 0xDC9000 (SEARCH, LG_GATE, EDGE_CHECK, FLOOR_CHECK, CE_GATE, WATCHDOG, C_GATE,
+    # RUN_CUT, SW_ANIM, SW_FACE, SW_S, JUMP_GATE); its state is at 0xDBFD20..0xDBFD63, in the .data
+    # page mapped above
     (MODS_RAW, b"\xCC" * len(MODS_CODE), MODS_CODE),
-    # hooks into it (the contact entry call is inside WALLSLIDE_CAVE, written above)
-    # WALLRUN_CAVE 0x8BA135 "no wall contact" je 0x64D797 -> je SEARCH
-    (0x4BA135, bytes.fromhex("0F 84 5C 36 D9 FF"), bytes.fromhex("0F 84 09 EF 50 00")),
-    # 0x64CD81 mov eax,[0xD34A48] (before the ledge probe 0x546850) -> jmp LG_GATE
-    (0x24CD81, bytes.fromhex("A1 48 4A D3 00"), bytes.fromhex("E9 54 C5 77 00")),
-    # slide contact entry 0x8ba804 call (animation check) -> call CE_GATE
-    (0x4BA804, bytes.fromhex("E8 4A 06 00 00"), bytes.fromhex("E8 A3 EC 50 00")),
-    # 0x630160 sub esp,0xe4 (per-frame airborne handler) -> jmp WATCHDOG ; nop
-    (0x230160, bytes.fromhex("81 EC E4 00 00 00"), bytes.fromhex("E9 92 93 79 00 90")),
-    # 0x725D9A call IsDown 0x71E450 (C held -> secondary-weapon throw) -> call C_GATE
-    (0x325D9A, bytes.fromhex("E8 B1 86 FF FF"), bytes.fromhex("E8 BC 39 6A 00")),
-    # slide jump exit 0x8bac5c: test byte [0x93F062],1 ; jz (Special Jump test) -> nops,
-    # so Space + a sideways stick jumps off at 45 degrees
+    # hooks into it, in this order (hooks inside WALLSLIDE_CAVE edit the cave written above)
+    # hook 1: WALLRUN_CAVE 0x8BA135 "no wall contact" je 0x64D797 (b14: SL_NOCONTACT) -> je SEARCH
+    (0x4BA135, bytes.fromhex("0F 84 5C 36 D9 FF"), bytes.fromhex("0F 84 89 EF 50 00")),
+    # hook 2: 0x64CD81 mov eax,[0xD34A48] (before the ledge probe 0x546850) -> jmp LG_GATE
+    (0x24CD81, bytes.fromhex("A1 48 4A D3 00"), bytes.fromhex("E9 11 C6 77 00")),
+    # hook 3: slide contact entry call (animation check) -> call CE_GATE
+    (0x4BA804, bytes.fromhex("E8 4A 06 00 00"), bytes.fromhex("E8 31 EE 50 00")),
+    # hook 4: 0x630160 sub esp,0xe4 (per-frame airborne handler) -> jmp WATCHDOG ; nop
+    (0x230160, bytes.fromhex("81 EC E4 00 00 00"), bytes.fromhex("E9 20 95 79 00 90")),
+    # b24: slide jump exit V test (test byte [0x93F062],1 ; jz) -> nops: Space + side = 45 deg
     (0x4BAC5C, bytes.fromhex("F6 05 62 F0 93 00 01 74 67"), bytes.fromhex("90 90 90 90 90 90 90 90 90")),
+    # hook 5: 0x725D9A call IsDown 0x71E450 (C held -> secondary-weapon throw) -> call C_GATE
+    (0x325D9A, bytes.fromhex("E8 B1 86 FF FF"), bytes.fromhex("E8 B7 3B 6A 00")),
+    # hook 6: 0x590FED run-continues branch -> je RUN_CUT (C during a horizontal run)
+    (0x190FED, bytes.fromhex("0F 84 06 18 00 00"), bytes.fromhex("0F 84 BC 89 83 00")),
+    # hook 7: slide frame anim block (32 bytes) -> call SW_ANIM + nops
+    (0x4BA9DE,
+     bytes.fromhex("53 E8 AC D1 BD FF 83 C4 04 3B 05 2C A7 8B 00 74 0F FF 35 2C A7 8B 00 53 E8 55 4B D5 FF 83 C4 08"),
+     bytes.fromhex("E8 45 F1 50 00 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90 90")),
+    # hook 8: slide frame face-the-wall call -> call SW_FACE
+    (0x4BA9FE, bytes.fromhex("E8 DA 03 00 00"), bytes.fromhex("E8 98 F2 50 00")),
+    # hook 9: slide frame fldz ; fstp [L_S] -> jmp SW_S
+    (0x4BAA17, bytes.fromhex("D9 EE D9 5F 50"), bytes.fromhex("E9 4D F3 50 00")),
+    # hook 10: slide Space test call PressedWithin 0x7050C0 -> call JUMP_GATE
+    (0x4BA979, bytes.fromhex("E8 42 A7 E4 FF"), bytes.fromhex("E8 87 F4 50 00")),
+    # END GENERATED mods-hooks
 ]
 
 
