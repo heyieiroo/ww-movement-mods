@@ -65,13 +65,20 @@ torpedo attack along the same diagonal instead, with or without an enemy nearby.
 
 ### Wall slide (optional) Work in Progress
 
-Hold the drop button (**C**) in the air against a wall to slide down it, like on a curtain, swords 
-drawn. Steer left and right while sliding, jump off with **Space** (straight out) or **Space + 
+<p align="center">
+  <img src="media/wall-slide.gif" width="560" alt="The Prince sliding down a wall like on a curtain">
+</p>
+
+Hold the drop button (**C**) in the air against a wall to slide down it, like on a curtain.
+Steer left and right while sliding, jump off with **Space** (straight out) or **Space + 
 direction** (45 degrees to that side), or release **C** to let go. The patcher asks whether to
 include it.
 
-Holding **C** also starts a slide when you drop from a ledge or a wallrun ends next to a wall, without
-touching it first. No slide starts when a ledge you can grab is just below or the floor is close.
+Sliding down walls can be done via hitting a wall mid-air, dropping from a ledge, or after a wallrun.
+
+> [!NOTE]
+> The slide uses the curtain animations, which the game only loads in the first area with a curtain.
+> Before that area the slide doesn't work; from there on it does.
 
 ### Story-trigger fix
 
