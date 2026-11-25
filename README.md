@@ -111,9 +111,9 @@ it, and verifies the sha256 of the result:
 
 | Version | sha256 |
 |---|---|
-| Vertical wall runs and wall slide (default) | `fa6e88af8cee549379aec51cd1e87f79da047d14421b99d57f59b828a1bba895` |
+| Vertical wall runs and wall slide (default) | `86f9e90e29dcc60d6ffbb1a0062066876cd4df6dfa3bd332cab9ac95050ab7e5` |
 | Vertical wall runs, no wall slide | `89815876a23200f8c3a47a752dae98d4778c2f075b09f1f7ffae740769b32c0b` |
-| Horizontal wall runs only, wall slide | `2c7aaa72a9afcb8f73e950542ab546bc0ff4f4370e53fa899ed697c5a5e30f25` |
+| Horizontal wall runs only, wall slide | `82f6f866098c39a61fd41594fdd351330156215b0b2ad46b61ed4a4687726c0c` |
 | Horizontal wall runs only, no wall slide | `ab030994cc2862e6bcd3cf4425b392e63349abcb6aa7a81943ad1b958635feeb` |
 
 If you previously applied an older version of these mods, restore the original exe first (from your
