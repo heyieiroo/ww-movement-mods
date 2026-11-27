@@ -59,8 +59,8 @@ ORIGINAL_SHA256 = "5559117d013155bbad608cedc2fd0dd272f37ed92c936fc4e151287f3b5ff
 PATCHED_SHA256 = {
     (True, False): "89815876a23200f8c3a47a752dae98d4778c2f075b09f1f7ffae740769b32c0b",
     (False, False): "ab030994cc2862e6bcd3cf4425b392e63349abcb6aa7a81943ad1b958635feeb",
-    (True, True): "6680492e745bf20e7a21c87fdfb24a141aa7373bb8f664f6d0760e3bbde79e1a",
-    (False, True): "0c95b5b7a7b2a7e406695123ec0b34c70db683e17cbf88599ed7234f1c50e258",
+    (True, True): "fb328f9437c38ba1c16bae00c390a0f2049f6784930a9f1351e3ced572393fc5",
+    (False, True): "6837a1cbe0b524076ebca2efd6aea8970a9c30a6ee4d56b7764eb4e29835a2b2",
 }
 # END GENERATED patched-sha256
 
@@ -114,6 +114,10 @@ KNOWN_OLDER_BUILDS = {
         "movement patch with vertical wall runs and the seventh wall slide",
     "82f6f866098c39a61fd41594fdd351330156215b0b2ad46b61ed4a4687726c0c":
         "movement patch with the seventh wall slide, without vertical wall runs",
+    "6680492e745bf20e7a21c87fdfb24a141aa7373bb8f664f6d0760e3bbde79e1a":
+        "movement patch with vertical wall runs and the eighth wall slide",
+    "0c95b5b7a7b2a7e406695123ec0b34c70db683e17cbf88599ed7234f1c50e258":
+        "movement patch with the eighth wall slide, without vertical wall runs",
     # END GENERATED older-builds
 }
 
@@ -682,8 +686,9 @@ M06_PRIMARY_ATTACK = bytes.fromhex(  # .m06_primary_attack at 0x8BA6B0
 # section. slide.s is the slide itself (a mode of the airborne state 0x412, run from M02's cave: its
 # wall-contact point and its no-contact je), with the entry from wall contact and the entry without
 # it (the search); the other parts add the start gates below the Prince, the ledge gate, the
-# watchdog, the C gate, the run cut, the curtain-like entry animations and the animation keep. The
-# slide state and the watchdog's scratch are at 0xDBFD00..0xDBFD8F, in the .data page M07 maps.
+# watchdog, the C gate, the run cut, the curtain-like entry animations, the animation keep and the
+# curtain kit preload (its world joins every Prince area). The slide state and the watchdog's
+# scratch are at 0xDBFD00..0xDBFD8F, in the .data page M07 maps.
 
 M07_TUNABLES = bytes.fromhex(  # .m07_tunables at 0xDC9000, source m07_wall_slide/tunables.s
     # ---- tunables (the checks read them as disp8 from ebp = M07_TB, slide.inc) ----
@@ -740,16 +745,22 @@ M07_TUNABLES = bytes.fromhex(  # .m07_tunables at 0xDC9000, source m07_wall_slid
                                             #   1.04 s), lengthen if a slower chain climbs
     "00 00 00 00 "                          # M07_HEIGHT_CAP_MARGIN: .float 0.0   # a new slide may start this
                                             #   far above the last start (user: 0)
+    "9A 99 99 3E "                          # M07_RUN_PRESS_EARLY: .float 0.3   # the run cut also counts a C
+                                            #   press this long (s) before m07_run_t0; shortcut: m07_run_t0
+                                            #   lags the visible run start by ~0.19 s (b48/b49 logs, one
+                                            #   platform), 0.3 also takes a press at the wall contact (b49 T1:
+                                            #   0.26); record the visible start instead if a run type lags
+                                            #   longer
     # the offsets from M07_TB that slide.inc gives checks.s (ebp = M07_TB)
 )
 
-M07_SEARCH = bytes.fromhex(  # .m07_search at 0xDC90BC, source m07_wall_slide/search.s
+M07_SEARCH = bytes.fromhex(  # .m07_search at 0xDC90C0, source m07_wall_slide/search.s
     # Ledge grab gate (0x64CD81). Block the probe while a search-started slide of this Prince is
     # running (fresh state, T0 == m07_search_t0) and he is less than M07_LEDGE_DROP below its start height.
     # m07_ledge_gate:
     "60 "                                   # pushad
     "83 EC 10 "                             # sub esp, 16
-    "E8 68 0A 00 00 "                       # call m07_obj_now   # (slide.s) ebx = obj, esi = vars, ZF=1: his
+    "E8 74 0A 00 00 "                       # call m07_obj_now   # (slide.s) ebx = obj, esi = vars, ZF=1: his
                                             #   slide is running
     "75 41 "                                # jnz .Lledge_probe_allowed
     "3B 1D 14 C4 D0 00 "                    # cmp ebx, dword ptr ds:PRINCE_ACTOR
@@ -760,7 +771,7 @@ M07_SEARCH = bytes.fromhex(  # .m07_search at 0xDC90BC, source m07_wall_slide/se
     "89 E0 "                                # mov eax, esp
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 FB 5B 6C FF "                       # call FN_GET_POSITION
+    "E8 F7 5B 6C FF "                       # call FN_GET_POSITION
     "83 C4 08 "                             # add esp, 8
     "D9 05 24 FD DB 00 "                    # fld dword ptr ds:m07_search_z
     "D8 64 24 08 "                          # fsub dword ptr [esp+8]   # descent since the start
@@ -771,15 +782,15 @@ M07_SEARCH = bytes.fromhex(  # .m07_search at 0xDC90BC, source m07_wall_slide/se
     # m07_log_lgblock:
     "83 C4 10 "                             # add esp, 16
     "61 "                                   # popad
-    "E9 98 3C 88 FF "                       # jmp LEDGE_PROBE_SKIP
+    "E9 94 3C 88 FF "                       # jmp LEDGE_PROBE_SKIP
     # .Lledge_probe_allowed:
     "83 C4 10 "                             # add esp, 16
     "61 "                                   # popad
     "A1 48 4A D3 00 "                       # mov eax, dword ptr ds:CURRENT_OBJ   # the replaced instruction
-    "E9 70 3C 88 FF "                       # jmp LEDGE_PROBE_CALL
+    "E9 6C 3C 88 FF "                       # jmp LEDGE_PROBE_CALL
 )
 
-M07_CHECKS = bytes.fromhex(  # .m07_checks at 0xDC9116, source m07_wall_slide/checks.s
+M07_CHECKS = bytes.fromhex(  # .m07_checks at 0xDC911A, source m07_wall_slide/checks.s
     # The checks below the Prince for a start m07_start_ok allowed: the height cap, then the edge check,
     # then the floor check (each runs only when the ones before it pass). Called by the contact entry
     # and the search (slide.s: ebp = m07_slide_vars, never 0) with the floor limit M07_FLOOR_CLEAR and
@@ -800,7 +811,7 @@ M07_CHECKS = bytes.fromhex(  # .m07_checks at 0xDC9116, source m07_wall_slide/ch
     "8D 47 24 "                             # lea eax, [edi+M07_GF_POS]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 B8 5B 6C FF "                       # call FN_GET_POSITION
+    "E8 B4 5B 6C FF "                       # call FN_GET_POSITION
     "85 ED "                                # test ebp, ebp   # 0: the run cut
     "BD 80 90 DC 00 "                       # mov ebp, offset M07_TB   # tunables as disp8 (slide.inc)
     "8B 55 9C "                             # mov edx, [ebp+M07_T_FLOOR_CLEAR]
@@ -864,13 +875,13 @@ M07_CHECKS = bytes.fromhex(  # .m07_checks at 0xDC9116, source m07_wall_slide/ch
     "50 "                                   # push eax
     "6A 00 "                                # push 0
     "53 "                                   # push ebx
-    "E8 F2 4D 6D FF "                       # call FN_BOX_QUERY
+    "E8 EE 4D 6D FF "                       # call FN_BOX_QUERY
     "68 0F F4 4F 00 "                       # push LEDGE_EDGE_MASK
     "6A 01 "                                # push LEDGE_EDGE_TYPE
     "8D 47 24 "                             # lea eax, [edi+M07_GF_POS]
     "50 "                                   # push eax
     "6A 00 "                                # push 0
-    "E8 A0 4F 6D FF "                       # call FN_QUERY_NEAREST
+    "E8 9C 4F 6D FF "                       # call FN_QUERY_NEAREST
     "89 47 04 "                             # mov [edi+M07_GF_EDGE_INDEX], eax
     "85 C0 "                                # test eax, eax
     "78 1D "                                # js .Lfloor
@@ -880,9 +891,9 @@ M07_CHECKS = bytes.fromhex(  # .m07_checks at 0xDC9116, source m07_wall_slide/ch
     "51 "                                   # push ecx
     "50 "                                   # push eax
     "6A 00 "                                # push 0
-    "E8 59 4F 6D FF "                       # call FN_QUERY_FLAGS
+    "E8 55 4F 6D FF "                       # call FN_QUERY_FLAGS
     "89 47 64 "                             # mov [edi+M07_GF_EDGE_FLAGS], eax
-    "E8 51 50 6D FF "                       # call FN_QUERY_CLOSEST_POINT   # (0, index, &pos, &point): the
+    "E8 4D 50 6D FF "                       # call FN_QUERY_CLOSEST_POINT   # (0, index, &pos, &point): the
                                             #   same arguments, 0x49E140 leaves them
     # m07_log_bedge:
     "F9 "                                   # stc
@@ -893,12 +904,12 @@ M07_CHECKS = bytes.fromhex(  # .m07_checks at 0xDC9116, source m07_wall_slide/ch
     # one ray from pos + (0,0,M07_FLOOR_PROBE_Z) along (0,0,-(M07_FLOOR_PROBE_Z+M07_FLOOR_PROBE))
     "D9 45 A8 "                             # fld dword ptr [ebp+M07_T_FLOOR_PROBE]
     "D9 45 A4 "                             # fld dword ptr [ebp+M07_T_FLOOR_PROBE_Z]
-    "E8 34 0B 00 00 "                       # call m07_ray_down   # (slide.s)
+    "E8 40 0B 00 00 "                       # call m07_ray_down   # (slide.s)
     "74 12 "                                # jz 1f
     "8D 47 68 "                             # lea eax, [edi+M07_GF_FLOOR_POINT]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 65 95 6D FF "                       # call FN_RAY_HIT_POINT
+    "E8 61 95 6D FF "                       # call FN_RAY_HIT_POINT
     "D9 47 2C "                             # fld dword ptr [edi+M07_GF_POS+8]
     "D8 67 70 "                             # fsub dword ptr [edi+M07_GF_FLOOR_POINT+8]
     "EB 03 "                                # jmp 2f
@@ -932,24 +943,24 @@ M07_CHECKS = bytes.fromhex(  # .m07_checks at 0xDC9116, source m07_wall_slide/ch
     "55 "                                   # push ebp
     "89 E5 "                                # mov ebp, esp
     "D9 47 C8 "                             # fld dword ptr [edi+M07_F_SEARCH_Z]
-    "E8 CF 0A 00 00 "                       # call m07_from0   # (slide.s)
+    "E8 DB 0A 00 00 "                       # call m07_from0   # (slide.s)
     "D9 EE "                                # fldz
     "D9 47 C4 "                             # fld dword ptr [edi+M07_F_SEARCH_REACH]
     "8D 57 18 "                             # lea edx, [edi+M07_SF_RAY_DIR]
-    "E8 FC 0A 00 00 "                       # call m07_ray_k   # (slide.s)
+    "E8 08 0B 00 00 "                       # call m07_ray_k   # (slide.s)
     # m07_log_sray:
     "74 51 "                                # jz .Lray_miss
     "8D 47 0C "                             # lea eax, [edi+M07_SF_HIT_POINT]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 1B 95 6D FF "                       # call FN_RAY_HIT_POINT
+    "E8 17 95 6D FF "                       # call FN_RAY_HIT_POINT
     "8D 07 "                                # lea eax, [edi+M07_SF_HIT_NORMAL]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 B2 95 6D FF "                       # call FN_RAY_HIT_NORMAL
+    "E8 AE 95 6D FF "                       # call FN_RAY_HIT_NORMAL
     "68 FF FF 00 00 "                       # push 0xFFFF
     "53 "                                   # push ebx
-    "E8 67 6E 6D FF "                       # call FN_SURFACE_FLAGS
+    "E8 63 6E 6D FF "                       # call FN_SURFACE_FLAGS
     # m07_log_shit:
     "A9 00 00 03 00 "                       # test eax, SURFACE_NO_RUN_MASK
     "75 2C "                                # jnz .Lray_miss
@@ -962,7 +973,7 @@ M07_CHECKS = bytes.fromhex(  # .m07_checks at 0xDC9116, source m07_wall_slide/ch
                                             #   front test rejects it)
     "8D 07 "                                # lea eax, [edi+M07_SF_HIT_NORMAL]
     "50 "                                   # push eax
-    "E8 9B 33 6B FF "                       # call FN_FLATTEN_NORMALIZE
+    "E8 97 33 6B FF "                       # call FN_FLATTEN_NORMALIZE
     # ray direction within 60 degrees of the wall: -(RD . n) >= FRONT
     "D9 47 18 "                             # fld dword ptr [edi+M07_SF_RAY_DIR]
     "D8 0F "                                # fmul dword ptr [edi+M07_SF_HIT_NORMAL]
@@ -981,13 +992,13 @@ M07_CHECKS = bytes.fromhex(  # .m07_checks at 0xDC9116, source m07_wall_slide/ch
     "C3 "                                   # ret
 )
 
-M07_WATCHDOG = bytes.fromhex(  # .m07_watchdog at 0xDC929F, source m07_wall_slide/watchdog.s
+M07_WATCHDOG = bytes.fromhex(  # .m07_watchdog at 0xDC92A3, source m07_wall_slide/watchdog.s
     # m07_watchdog:
     "81 EC E4 00 00 00 "                    # sub esp, 0xe4   # the replaced instruction, replayed first
     "60 "                                   # pushad
     "BD 40 FD DB 00 "                       # mov ebp, M07_STATE
     "89 65 4C "                             # mov [ebp+M07_W_ESP], esp
-    "E8 7A 08 00 00 "                       # call m07_obj_now   # (slide.s) ebx = obj, esi = vars, eax = now,
+    "E8 86 08 00 00 "                       # call m07_obj_now   # (slide.s) ebx = obj, esi = vars, eax = now,
                                             #   edx = d, ZF=1: running
     "89 DF "                                # mov edi, ebx
     "89 45 38 "                             # mov [ebp+M07_W_NOW], eax
@@ -995,7 +1006,7 @@ M07_WATCHDOG = bytes.fromhex(  # .m07_watchdog at 0xDC929F, source m07_wall_slid
     "B3 00 "                                # mov bl, 0
     "39 75 C0 "                             # cmp [ebp+M07_VARS], esi
     "75 09 "                                # jne 2f
-    "3B 15 20 97 DC 00 "                    # cmp edx, dword ptr ds:M07_STALE   # his: d > STALE signed: not
+    "3B 15 30 97 DC 00 "                    # cmp edx, dword ptr ds:M07_STALE   # his: d > STALE signed: not
                                             #   running (d < 0: neither)
     "0F 9F C3 "                             # setg bl
     # 2:
@@ -1014,12 +1025,12 @@ M07_WATCHDOG = bytes.fromhex(  # .m07_watchdog at 0xDC929F, source m07_wall_slid
     "6A 03 "                                # push 3
     "6A 01 "                                # push 1
     "57 "                                   # push edi
-    "E8 C0 7B 93 FF "                       # call FN_SNAP_SWORD
+    "E8 BC 7B 93 FF "                       # call FN_SNAP_SWORD
     # 4:
     "8D 45 2C "                             # lea eax, [ebp+M07_W_POS]
     "50 "                                   # push eax
     "57 "                                   # push edi
-    "E8 E6 59 6C FF "                       # call FN_GET_POSITION
+    "E8 E2 59 6C FF "                       # call FN_GET_POSITION
     # side-search allowance: vars on 0x420, kept in 0x412, else 0 (m07_run_t0 = now when it changes)
     "8B 86 40 06 00 00 "                    # mov eax, [esi+0x640]
     "66 2D 12 04 "                          # sub ax, 0x412   # states are below 0x10000
@@ -1045,7 +1056,7 @@ M07_WATCHDOG = bytes.fromhex(  # .m07_watchdog at 0xDC929F, source m07_wall_slid
     # .Lout:
     "8B 65 4C "                             # mov esp, [ebp+M07_W_ESP]
     "61 "                                   # popad
-    "E9 30 6E 86 FF "                       # jmp AIR_FRAME_HANDLER_BODY
+    "E9 2C 6E 86 FF "                       # jmp AIR_FRAME_HANDLER_BODY
     # .Lstuck:
     # stuck: d = now - m07_wd_timer; any axis moved more than WD_EPS, or d < 0 -> .Lmoved;
     # d < WD_STUCK -> out
@@ -1086,8 +1097,8 @@ M07_WATCHDOG = bytes.fromhex(  # .m07_watchdog at 0xDC929F, source m07_wall_slid
     "84 FF "                                # test bh, bh
     "75 B1 "                                # jnz .Lstuck
     "57 "                                   # push edi
-    "E8 05 E8 6C FF "                       # call FN_CURRENT_ANIM
-    "3B 05 0C 97 DC 00 "                    # cmp eax, dword ptr ds:M07_ANIM_SLIDE
+    "E8 01 E8 6C FF "                       # call FN_CURRENT_ANIM
+    "3B 05 1C 97 DC 00 "                    # cmp eax, dword ptr ds:M07_ANIM_SLIDE
     "74 13 "                                # je 8f
     "66 2D 69 03 "                          # sub ax, 0x369   # the head-on set 0x369/0x377, the oblique grabs
                                             #   0x36A/0x36B
@@ -1101,23 +1112,23 @@ M07_WATCHDOG = bytes.fromhex(  # .m07_watchdog at 0xDC929F, source m07_wall_slid
     "8D 5D 3C "                             # lea ebx, [ebp+M07_W_VEL]
     "53 "                                   # push ebx
     "57 "                                   # push edi
-    "E8 A0 74 6C FF "                       # call FN_GET_FACING
+    "E8 9C 74 6C FF "                       # call FN_GET_FACING
     "D9 E8 "                                # fld1
     "D9 E0 "                                # fchs
     # the slide's fall exit: v = (s * OUT * [ebx], s * OUT * [ebx+4], -V0), s = st(0)
     # .Lfall_exit:
-    "D8 0D A8 96 DC 00 "                    # fmul dword ptr ds:M07_OUT
+    "D8 0D B8 96 DC 00 "                    # fmul dword ptr ds:M07_OUT
     "D9 C0 "                                # fld st(0)
     "D8 0B "                                # fmul dword ptr [ebx]
     "D9 5D 3C "                             # fstp dword ptr [ebp+M07_W_VEL]
     "D8 4B 04 "                             # fmul dword ptr [ebx+4]
     "D9 5D 40 "                             # fstp dword ptr [ebp+M07_W_VEL+4]
-    "D9 05 90 96 DC 00 "                    # fld dword ptr ds:M07_V0
+    "D9 05 A0 96 DC 00 "                    # fld dword ptr ds:M07_V0
     "D9 E0 "                                # fchs
     "D9 5D 44 "                             # fstp dword ptr [ebp+M07_W_VEL+8]
     "89 FB "                                # mov ebx, edi
     "8D 55 3C "                             # lea edx, [ebp+M07_W_VEL]
-    "E8 2A 07 00 00 "                       # call m07_let_go   # start-fall with the let-go animation, then
+    "E8 36 07 00 00 "                       # call m07_let_go   # start-fall with the let-go animation, then
                                             #   the velocity (slide.s)
     "8B 45 34 "                             # mov eax, [ebp+M07_W_POS+8]
     "89 86 04 02 00 00 "                    # mov [esi+0x204], eax   # fall reset
@@ -1126,7 +1137,7 @@ M07_WATCHDOG = bytes.fromhex(  # .m07_watchdog at 0xDC929F, source m07_wall_slid
     "E9 30 FF FF FF "                       # jmp .Lcopy   # m07_wd_pos = pos, m07_wd_timer = now
 )
 
-M07_C_GATE = bytes.fromhex(  # .m07_c_gate at 0xDC93F2, source m07_wall_slide/c_gate.s
+M07_C_GATE = bytes.fromhex(  # .m07_c_gate at 0xDC93F6, source m07_wall_slide/c_gate.s
     # C gate, called instead of IsDown 0x71E450(obj, &out, pad, bit) at 0x725D9A (its only caller).
     # Same arguments and results (out, eax, registers as IsDown leaves them; flags clobbered: the
     # caller reloads out and compares). Drops hook 5's return address and calls IsDown with the
@@ -1139,7 +1150,7 @@ M07_C_GATE = bytes.fromhex(  # .m07_c_gate at 0xDC93F2, source m07_wall_slide/c_
     # m07_c_gate:
     "83 C4 04 "                             # add esp, 4   # [esp] = obj, &out, pad, bit (the hook's
                                             #   arguments)
-    "E8 56 50 95 FF "                       # call FN_IS_DOWN
+    "E8 52 50 95 FF "                       # call FN_IS_DOWN
     "60 "                                   # pushad
     "3B 2D 14 C4 D0 00 "                    # cmp ebp, dword ptr ds:PRINCE_ACTOR
     "75 1F "                                # jne 9f
@@ -1157,30 +1168,31 @@ M07_C_GATE = bytes.fromhex(  # .m07_c_gate at 0xDC93F2, source m07_wall_slide/c_
                                             #   its last frame): not down
     # 9:
     "61 "                                   # popad
-    "E9 77 C9 95 FF "                       # jmp C_GATE_RET
+    "E9 73 C9 95 FF "                       # jmp C_GATE_RET
 )
 
-M07_RUN_CUT = bytes.fromhex(  # .m07_run_cut at 0xDC9428, source m07_wall_slide/run_cut.s
+M07_RUN_CUT = bytes.fromhex(  # .m07_run_cut at 0xDC942C, source m07_wall_slide/run_cut.s
     # ---- run cut (hook 6, je from 0x590FED; esi = vars, stack at handler level) ----
     # m07_run_cut:
     "60 "                                   # pushad
     "8B 1D 48 4A D3 00 "                    # mov ebx, dword ptr ds:CURRENT_OBJ
     "3B 1D 14 C4 D0 00 "                    # cmp ebx, dword ptr ds:PRINCE_ACTOR
-    "75 4D "                                # jne .Lrun_continues
+    "75 53 "                                # jne .Lrun_continues
     "39 35 40 FD DB 00 "                    # cmp dword ptr ds:m07_side_rays, esi
-    "75 45 "                                # jne .Lrun_continues
+    "75 4B "                                # jne .Lrun_continues
     "D9 86 14 07 00 00 "                    # fld dword ptr [esi+VARS_C_PRESS_TIME]
+    "D8 05 BC 90 DC 00 "                    # fadd dword ptr ds:M07_RUN_PRESS_EARLY
     "D8 1D 44 FD DB 00 "                    # fcomp dword ptr ds:m07_run_t0
     "DF E0 "                                # fnstsw ax
     "9E "                                   # sahf
-    "72 34 "                                # jb .Lrun_continues   # pressed before this run started
-                                            #   (unordered too)
-    "E8 E7 06 00 00 "                       # call m07_now   # (slide.s) eax = now
-    "E8 14 07 00 00 "                       # call m07_start_ok   # (slide.s) keeps eax
+    "72 34 "                                # jb .Lrun_continues   # pressed more than M07_RUN_PRESS_EARLY
+                                            #   before this run started (unordered too)
+    "E8 ED 06 00 00 "                       # call m07_now   # (slide.s) eax = now
+    "E8 1A 07 00 00 "                       # call m07_start_ok   # (slide.s) keeps eax
     "74 28 "                                # jz .Lrun_continues
     "31 ED "                                # xor ebp, ebp   # m07_contact_gate for the run cut: fallen 0,
                                             #   M07_FLOOR_CLEAR_RUN
-    "E8 B3 FC FF FF "                       # call m07_contact_gate
+    "E8 AD FC FF FF "                       # call m07_contact_gate
     "72 1F "                                # jc .Lrun_continues
     # m07_log_runcut:
     "50 "                                   # push eax
@@ -1188,23 +1200,23 @@ M07_RUN_CUT = bytes.fromhex(  # .m07_run_cut at 0xDC9428, source m07_wall_slide/
     "50 "                                   # push eax   # the velocity (3 floats)
     "54 "                                   # push esp
     "53 "                                   # push ebx
-    "E8 11 E5 6D FF "                       # call FN_GET_VELOCITY
+    "E8 07 E5 6D FF "                       # call FN_GET_VELOCITY
     "59 "                                   # pop ecx
     "59 "                                   # pop ecx
     "6A 2C "                                # push 0x2C   # start-fall with animation 0x2C, then the run's
                                             #   velocity (slide.s)
     "59 "                                   # pop ecx
     "89 E2 "                                # mov edx, esp
-    "E8 91 06 00 00 "                       # call m07_start_fall
+    "E8 97 06 00 00 "                       # call m07_start_fall
     "83 C4 0C "                             # add esp, 12
     "61 "                                   # popad
-    "E9 13 7C 7C FF "                       # jmp WALLRUN_JUMPOFF_TAIL
+    "E9 09 7C 7C FF "                       # jmp WALLRUN_JUMPOFF_TAIL
     # .Lrun_continues:
     "61 "                                   # popad
-    "E9 6F 93 7C FF "                       # jmp RUN_CONTINUES
+    "E9 65 93 7C FF "                       # jmp RUN_CONTINUES
 )
 
-M07_ENTRY_ANIMS = bytes.fromhex(  # .m07_entry_anims at 0xDC948A, source m07_wall_slide/entry_anims.s
+M07_ENTRY_ANIMS = bytes.fromhex(  # .m07_entry_anims at 0xDC9494, source m07_wall_slide/entry_anims.s
     # ebx = obj, edi = the slide frame with n (flat, unit, out of the wall) at M07_SF_NORMAL, ebp =
     # m07_slide_vars; called by both start paths (slide.s) before anything
     # zeroes his velocity or turns him: m07_sway_k = (v . t) / M07_SWAY_VREF clamped to +-M07_SWAY_KMAX,
@@ -1215,7 +1227,7 @@ M07_ENTRY_ANIMS = bytes.fromhex(  # .m07_entry_anims at 0xDC948A, source m07_wal
                                             #   frame's rays write it next)
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 EC E4 6D FF "                       # call FN_GET_VELOCITY
+    "E8 E2 E4 6D FF "                       # call FN_GET_VELOCITY
     "D9 47 34 "                             # fld dword ptr [edi+M07_SF_VELOCITY+4]
     "D8 0F "                                # fmul dword ptr [edi+M07_SF_NORMAL]   # vy * nx
     "D9 47 30 "                             # fld dword ptr [edi+M07_SF_VELOCITY]
@@ -1237,9 +1249,9 @@ M07_ENTRY_ANIMS = bytes.fromhex(  # .m07_entry_anims at 0xDC948A, source m07_wal
     "8D 45 54 "                             # lea eax, [ebp+W_F0]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 89 73 6C FF "                       # call FN_GET_FACING
+    "E8 7F 73 6C FF "                       # call FN_GET_FACING
     "58 "                                   # pop eax
-    "E8 53 31 6B FF "                       # call FN_FLATTEN_NORMALIZE   # (&m07_sway_f0 still pushed)
+    "E8 49 31 6B FF "                       # call FN_FLATTEN_NORMALIZE   # (&m07_sway_f0 still pushed)
     # m07_log_sway:
     "83 C4 0C "                             # add esp, 12
     "C3 "                                   # ret
@@ -1303,7 +1315,7 @@ M07_ENTRY_ANIMS = bytes.fromhex(  # .m07_entry_anims at 0xDC948A, source m07_wal
     # m07_entry_anim:
     "60 "                                   # pushad
     "53 "                                   # push ebx
-    "E8 5C E6 6C FF "                       # call FN_CURRENT_ANIM
+    "E8 52 E6 6C FF "                       # call FN_CURRENT_ANIM
     "59 "                                   # pop ecx
     "96 "                                   # xchg esi, eax   # esi = his animation (the vars are not needed
                                             #   here)
@@ -1376,7 +1388,7 @@ M07_ENTRY_ANIMS = bytes.fromhex(  # .m07_entry_anims at 0xDC948A, source m07_wal
     "74 09 "                                # je 5f
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 7F 5F 84 FF "                       # call FN_SET_ANIM
+    "E8 75 5F 84 FF "                       # call FN_SET_ANIM
     "59 "                                   # pop ecx
     "58 "                                   # pop eax
     # 5:
@@ -1385,7 +1397,7 @@ M07_ENTRY_ANIMS = bytes.fromhex(  # .m07_entry_anims at 0xDC948A, source m07_wal
     "8D 47 60 "                             # lea eax, [edi+M07_SF_ZERO]   # a phase anim: zero velocity
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 7E 53 84 FF "                       # call FN_SET_VELOCITY
+    "E8 74 53 84 FF "                       # call FN_SET_VELOCITY
     "59 "                                   # pop ecx
     "59 "                                   # pop ecx
     # 6:
@@ -1422,7 +1434,7 @@ M07_ENTRY_ANIMS = bytes.fromhex(  # .m07_entry_anims at 0xDC948A, source m07_wal
     "D9 5F 18 "                             # fstp dword ptr [edi+M07_SF_TMP]
     "8D 47 18 "                             # lea eax, [edi+M07_SF_TMP]
     "50 "                                   # push eax
-    "E8 EF 2F 6B FF "                       # call FN_FLATTEN_NORMALIZE
+    "E8 E5 2F 6B FF "                       # call FN_FLATTEN_NORMALIZE
     "58 "                                   # pop eax
     # m07_log_swface:
     "EB 02 "                                # jmp 9f
@@ -1430,7 +1442,7 @@ M07_ENTRY_ANIMS = bytes.fromhex(  # .m07_entry_anims at 0xDC948A, source m07_wal
     "DD D8 "                                # fstp st(0)
     # 9:
     "61 "                                   # popad
-    "E9 07 06 00 00 "                       # jmp m07_set_facing
+    "E9 0D 06 00 00 "                       # jmp m07_set_facing
     # called by the slide frame (slide.s .Llateral) on frames with contact: ZF=1 (and the FPU stack
     # empty) when this slide's sway is not on; else ZF=0 and the scripted step replaces the stick:
     # M07_SF_LATERAL = s, left as it is (0) when LAT * dz <= M07_SWAY_EPS (dz >= 0: tau_prev <= tau
@@ -1461,7 +1473,7 @@ M07_ENTRY_ANIMS = bytes.fromhex(  # .m07_entry_anims at 0xDC948A, source m07_wal
     "C3 "                                   # ret
 )
 
-M07_ANIM_TABLE = bytes.fromhex(  # .m07_anim_table at 0xDC9672, source m07_wall_slide/anim_table.s
+M07_ANIM_TABLE = bytes.fromhex(  # .m07_anim_table at 0xDC967C, source m07_wall_slide/anim_table.s
     # eax = animation id; ZF=1 if its slot in the Prince's table is empty or out of range.
     # anim = [[obj+0x14]], table = [anim+0x30], word [table] = count, slot = [table+8+id*4].
     # Clobbers ecx (and eax = 0 when out of range); keeps edx (m07_anims_ok counts in it, m07_entry_anim
@@ -1480,7 +1492,7 @@ M07_ANIM_TABLE = bytes.fromhex(  # .m07_anim_table at 0xDC9672, source m07_wall_
     # m07_mods_end:
 )
 
-M07_SLIDE_TUNABLES = bytes.fromhex(  # .m07_slide_tunables at 0xDC9690, source m07_wall_slide/slide_tunables.s
+M07_SLIDE_TUNABLES = bytes.fromhex(  # .m07_slide_tunables at 0xDC96A0, source m07_wall_slide/slide_tunables.s
     # ---- copied into the slide frame by the slide entry (slide.s): M07_F_COUNT dwords from
     # M07_FRAME_TUNABLES to M07_SF_TUNABLES, so the slide's code reads them as [edi+M07_F_*]
     # (slide.inc). The other code reads these addresses. Checked against slide.inc below. ----
@@ -1555,7 +1567,7 @@ M07_SLIDE_TUNABLES = bytes.fromhex(  # .m07_slide_tunables at 0xDC9690, source m
     # the frame offsets in slide.inc
 )
 
-M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slide.s
+M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9740, source m07_wall_slide/slide.s
     # ---- exit to vanilla (before the entry: within short jumps of the contact entry) ----
     # m07_log_reject:
     # .Lvanilla_contact:
@@ -1563,7 +1575,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
                                             #   registers, sub esp,0x2c, ebx = esp); M02's
     "89 DC "                                # mov esp, ebx   # wall-run attempt reads no other register before
                                             #   its popad
-    "E9 07 0A AF FF "                       # jmp m02_wallrun_attempt
+    "E9 F7 09 AF FF "                       # jmp m02_wallrun_attempt
     # ---- entry: eax = the wall contact result at m02_contact (non-zero), or 0 at M02's "no wall
     # contact" je (hook 1, m07_search) ----
     # m07_search:
@@ -1578,7 +1590,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "81 EC E0 00 00 00 "                    # sub esp, M07_SF_PUSHED - M07_SF_TUNABLES
     "89 E7 "                                # mov edi, esp   # the tunables the slide reads, below the frame
                                             #   (slide.inc)
-    "BE 90 96 DC 00 "                       # mov esi, offset M07_FRAME_TUNABLES
+    "BE A0 96 DC 00 "                       # mov esi, offset M07_FRAME_TUNABLES
     "6A 20 "                                # push M07_F_COUNT
     "59 "                                   # pop ecx
     "F3 A5 "                                # rep movsd   # edi = the frame
@@ -1598,27 +1610,27 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "E3 7A "                                # jecxz .Lsearch
     "E8 F2 03 00 00 "                       # call m07_start_ok   # (eax = now)
     "74 B2 "                                # jz .Lvanilla_contact
-    "E8 93 F9 FF FF "                       # call m07_contact_gate   # height cap, edge, floor (checks.s; eax
+    "E8 87 F9 FF FF "                       # call m07_contact_gate   # height cap, edge, floor (checks.s; eax
                                             #   = now, ebp != 0)
     "72 AB "                                # jc .Lvanilla_contact
     "8D 47 18 "                             # lea eax, [edi+M07_SF_TMP]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 C1 70 6C FF "                       # call FN_GET_FACING
+    "E8 B1 70 6C FF "                       # call FN_GET_FACING
     "E8 3D 04 00 00 "                       # call .Lget_normal
     "74 9A "                                # jz .Lvanilla_contact
     # orient n out of the wall: sum over contact points of (pos - p) . n must be >= 0
     "8D 47 24 "                             # lea eax, [edi+M07_SF_POS]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 40 55 6C FF "                       # call FN_GET_POSITION
+    "E8 30 55 6C FF "                       # call FN_GET_POSITION
     "81 EC B4 00 00 00 "                    # sub esp, 15*12
     "89 E2 "                                # mov edx, esp
     "68 80 00 00 00 "                       # push 0x80
     "6A 0F "                                # push 15
     "52 "                                   # push edx
     "53 "                                   # push ebx
-    "E8 1A 65 6D FF "                       # call FN_CONTACT_POINTS
+    "E8 0A 65 6D FF "                       # call FN_CONTACT_POINTS
     "91 "                                   # xchg ecx, eax
     "8D 54 24 10 "                          # lea edx, [esp+16]
     "D9 EE "                                # fldz
@@ -1637,7 +1649,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "EB E4 "                                # jmp 1b
     # 2:
     "E8 2E 04 00 00 "                       # call .Lflip_if_neg
-    "E8 A7 FC FF FF "                       # call m07_sway_measure   # speed along the wall and his facing,
+    "E8 A1 FC FF FF "                       # call m07_sway_measure   # speed along the wall and his facing,
                                             #   before the slide frame
     # m07_log_entry:
     "E9 C8 00 00 00 "                       # jmp .Lstart
@@ -1655,7 +1667,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     # .Lvanilla_nocontact:
     "8D 67 70 "                             # lea esp, [edi+M07_SF_SIZE]
     "61 "                                   # popa
-    "E9 A6 3F 88 FF "                       # jmp AIR_NO_CONTACT
+    "E9 96 3F 88 FF "                       # jmp AIR_NO_CONTACT
     # .Lsearch:
     "3B 1D 14 C4 D0 00 "                    # cmp ebx, dword ptr ds:PRINCE_ACTOR
     "75 EF "                                # jne .Lvanilla_nocontact
@@ -1666,17 +1678,17 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
                                             #   (0x47C620 sets z = 0 itself)
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 46 70 6C FF "                       # call FN_GET_FACING
+    "E8 36 70 6C FF "                       # call FN_GET_FACING
     "8D 47 18 "                             # lea eax, [edi+M07_SF_RAY_DIR]
     "50 "                                   # push eax
-    "E8 0D 2E 6B FF "                       # call FN_FLATTEN_NORMALIZE
+    "E8 FD 2D 6B FF "                       # call FN_FLATTEN_NORMALIZE
     "8D 47 24 "                             # lea eax, [edi+M07_SF_POS]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 C3 54 6C FF "                       # call FN_GET_POSITION
+    "E8 B3 54 6C FF "                       # call FN_GET_POSITION
     "83 67 20 00 "                          # and dword ptr [edi+M07_SF_RAY_SIDE], 0   # 0 forward, 1 right, 2
                                             #   left
-    "E8 0B FA FF FF "                       # call m07_try_ray   # (checks.s)
+    "E8 FF F9 FF FF "                       # call m07_try_ray   # (checks.s)
     "73 31 "                                # jnc .Lgot_wall
     "39 75 40 "                             # cmp [ebp+m07_side_rays-m07_slide_vars], esi   # side rays only
                                             #   after a horizontal run
@@ -1687,17 +1699,17 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "89 47 18 "                             # mov [edi+M07_SF_RAY_DIR], eax
     "D9 E0 "                                # fchs
     "D9 5F 1C "                             # fstp dword ptr [edi+M07_SF_RAY_DIR+4]
-    "E8 EE F9 FF FF "                       # call m07_try_ray
+    "E8 E2 F9 FF FF "                       # call m07_try_ray
     "73 14 "                                # jnc .Lgot_wall
     "FE 47 20 "                             # inc byte ptr [edi+M07_SF_RAY_SIDE]
     "0F BA 7F 18 1F "                       # btc dword ptr [edi+M07_SF_RAY_DIR], 31   # to his left: (-f.y,
                                             #   f.x)
     "0F BA 7F 1C 1F "                       # btc dword ptr [edi+M07_SF_RAY_DIR+4], 31
-    "E8 DA F9 FF FF "                       # call m07_try_ray
+    "E8 CE F9 FF FF "                       # call m07_try_ray
     "72 8F "                                # jc .Lvanilla_nocontact
     # .Lgot_wall:
     "8B 47 48 "                             # mov eax, [edi+M07_SF_NOW]
-    "E8 B5 F8 FF FF "                       # call m07_contact_gate   # height cap, edge, floor (checks.s;
+    "E8 A9 F8 FF FF "                       # call m07_contact_gate   # height cap, edge, floor (checks.s;
                                             #   logged there)
     "72 85 "                                # jc .Lvanilla_nocontact
     # snap: position = hit point + n * STAND (height kept)
@@ -1712,14 +1724,14 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "8D 47 24 "                             # lea eax, [edi+M07_SF_POS]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 2D 57 6C FF "                       # call FN_SET_POSITION
+    "E8 1D 57 6C FF "                       # call FN_SET_POSITION
     # every start: the speed along the wall and his facing, before the velocity zero (entry_anims.s)
-    "E8 02 FC FF FF "                       # call m07_sway_measure
+    "E8 FC FB FF FF "                       # call m07_sway_measure
     # velocity zero: the snap position must hold
     "8D 47 60 "                             # lea eax, [edi+M07_SF_ZERO]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 CE 50 84 FF "                       # call FN_SET_VELOCITY
+    "E8 BE 50 84 FF "                       # call FN_SET_VELOCITY
     # marks: this slide is search-started (T0 is unique per slide), its start height; a side-ray
     # start (after a horizontal run) records the sway, the slide frame adopts the others
     "8B 47 48 "                             # mov eax, [edi+M07_SF_NOW]
@@ -1800,7 +1812,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "DE E9 "                                # fsubp st(1), st
     "D9 5F 50 "                             # fstp dword ptr [edi+M07_SF_DZ]
     "E8 FF 02 00 00 "                       # call .Lneg_n   # M07_SF_TMP = -n
-    "E8 FA FB FF FF "                       # call m07_entry_anim   # entry phase animations, else the slide
+    "E8 F4 FB FF FF "                       # call m07_entry_anim   # entry phase animations, else the slide
                                             #   loop; facing = M07_SF_TMP (-n, turned during a sway)
     "E8 1D 03 00 00 "                       # call .Lfall_reset   # also M07_SF_POS = position
     "E8 E2 02 00 00 "                       # call .Ltangent
@@ -1820,7 +1832,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "74 32 "                                # jz .Lcorner
     "68 FF FF 00 00 "                       # push 0xFFFF
     "53 "                                   # push ebx
-    "E8 66 67 6D FF "                       # call FN_SURFACE_FLAGS
+    "E8 56 67 6D FF "                       # call FN_SURFACE_FLAGS
     "A9 00 00 03 00 "                       # test eax, SURFACE_NO_RUN_MASK
     "75 20 "                                # jnz .Lcorner
     # sideways clearance: from = pos + (0,0,PZ), delta = t*(BODY + s*LAT*dz);
@@ -1857,12 +1869,12 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "8D 47 24 "                             # lea eax, [edi+M07_SF_POS]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 EE 55 6C FF "                       # call FN_SET_POSITION
+    "E8 DE 55 6C FF "                       # call FN_SET_POSITION
     # m07_exits:
     # .Ldone:
     "8D 67 70 "                             # lea esp, [edi+M07_SF_SIZE]
     "61 "                                   # popa
-    "E9 84 44 88 FF "                       # jmp AIR_HANDLER_FRAME_END
+    "E9 74 44 88 FF "                       # jmp AIR_HANDLER_FRAME_END
     # m07_fall:
     # Let go (C released, or the wall ended): outward speed OUT, the current descent speed, fall
     # animation. Land (floor ray hit): the same without the outward speed.
@@ -1920,7 +1932,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     # vanilla window). A press (the slide always jumps off then) records m07_jumpoff_time = now and
     # goes on to the jump exit. Clobbers eax, ecx, edx, m07_sway_tmp.
     # m07_jump_gate:
-    "E8 A5 FA FF FF "                       # call m07_entry_tau   # edx = tau bits, ZF=1: this slide's sway
+    "E8 9F FA FF FF "                       # call m07_entry_tau   # edx = tau bits, ZF=1: this slide's sway
                                             #   record (entry_anims.s)
     "74 06 "                                # je 2f
     "3B 57 D8 "                             # cmp edx, dword ptr [edi+M07_F_ADOPT_WINDOW]   # no record yet:
@@ -1946,7 +1958,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "FF B6 B8 10 00 00 "                    # push dword ptr [esi+VARS_PAD_ID]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 64 B6 93 FF "                       # call FN_PRESSED_WITHIN
+    "E8 54 B6 93 FF "                       # call FN_PRESSED_WITHIN
     "83 C4 14 "                             # add esp, 20
     "58 "                                   # pop eax
     "85 C0 "                                # test eax, eax
@@ -1987,28 +1999,28 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     # .Ljump_facing_set:
     "E8 92 01 00 00 "                       # call .Lset_facing
     "83 A6 88 09 00 00 00 "                 # and dword ptr [esi+0x988], 0
-    "FF 35 14 97 DC 00 "                    # push dword ptr ds:M07_ANIM_JUMP
+    "FF 35 24 97 DC 00 "                    # push dword ptr ds:M07_ANIM_JUMP
     "53 "                                   # push ebx
-    "E8 BC 3F 81 FF "                       # call FN_JUMP_ANIM
+    "E8 AC 3F 81 FF "                       # call FN_JUMP_ANIM
     "8D 86 DC 08 00 00 "                    # lea eax, [esi+VARS_TAKEOFF_POS]   # take-off position = position
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 0F 52 6C FF "                       # call FN_GET_POSITION
+    "E8 FF 51 6C FF "                       # call FN_GET_POSITION
     "8B 86 E4 08 00 00 "                    # mov eax, [esi+VARS_TAKEOFF_Z]
     "89 86 04 02 00 00 "                    # mov [esi+VARS_FALL_START_Z], eax
     "83 A6 CC 04 00 00 00 "                 # and dword ptr [esi+VARS_FALLING], 0
     "6A 00 "                                # push 0
     "6A 13 "                                # push 0x13
     "53 "                                   # push ebx
-    "E8 22 44 6D FF "                       # call FN_49DF10
+    "E8 12 44 6D FF "                       # call FN_49DF10
     "68 9A 99 19 3E "                       # push 0x3E19999A   # 0.15f
     "8D 47 60 "                             # lea eax, [edi+M07_SF_ZERO]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 83 16 88 FF "                       # call FN_START_AIRBORNE
+    "E8 73 16 88 FF "                       # call FN_START_AIRBORNE
     "8D 67 70 "                             # lea esp, [edi+M07_SF_SIZE]
     "61 "                                   # popa
-    "E9 3D 43 88 FF "                       # jmp AIR_HANDLER_SWITCHED
+    "E9 2D 43 88 FF "                       # jmp AIR_HANDLER_SWITCHED
     # m07_helpers:
     # ---- helpers (called with one return address on the stack; locals are addressed through edi,
     # the slide state through ebp) ----
@@ -2017,7 +2029,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     # curtain's bottom exit. Used by the slide's fall exits, the watchdog and the run cut. Clobbers
     # eax, ecx, edx.
     # m07_let_go:
-    "8B 0D 10 97 DC 00 "                    # mov ecx, dword ptr ds:M07_ANIM_LET_GO
+    "8B 0D 20 97 DC 00 "                    # mov ecx, dword ptr ds:M07_ANIM_LET_GO
     # m07_start_fall:
     "52 "                                   # push edx
     "53 "                                   # push ebx
@@ -2029,9 +2041,9 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "6A 00 "                                # push 0
     "6A 2C "                                # push 0x2C
     "53 "                                   # push ebx
-    "E8 3F 1B 82 FF "                       # call FN_START_FALL
+    "E8 2F 1B 82 FF "                       # call FN_START_FALL
     "83 C4 20 "                             # add esp, 32
-    "E8 37 4E 84 FF "                       # call FN_SET_VELOCITY
+    "E8 27 4E 84 FF "                       # call FN_SET_VELOCITY
     "83 C4 08 "                             # add esp, 8
     "C3 "                                   # ret
     # ebx = the current object, esi = its vars ([[CURRENT_INST]+0x48]), then as m07_now. Used by the
@@ -2065,7 +2077,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "5A "                                   # pop edx
     "39 35 00 FD DB 00 "                    # cmp dword ptr ds:m07_slide_vars, esi
     "75 0A "                                # jne 9f   # ZF=0
-    "3B 15 20 97 DC 00 "                    # cmp edx, dword ptr ds:M07_STALE
+    "3B 15 30 97 DC 00 "                    # cmp edx, dword ptr ds:M07_STALE
     "77 02 "                                # ja 9f   # ZF=0
     "39 C0 "                                # cmp eax, eax   # ZF=1
     # 9:
@@ -2080,13 +2092,13 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     # m07_start_ok:
     "50 "                                   # push eax   # [esp] = now
     "E8 D9 FF FF FF "                       # call m07_running   # edx = now - m07_slide_last
-    "3B 15 A4 96 DC 00 "                    # cmp edx, dword ptr ds:M07_GRACE
+    "3B 15 B4 96 DC 00 "                    # cmp edx, dword ptr ds:M07_GRACE
     "72 38 "                                # jb 8f
     "E8 37 00 00 00 "                       # call m07_c_down
     "74 33 "                                # jz 9f
     "D9 04 24 "                             # fld dword ptr [esp]
     "D8 A6 14 07 00 00 "                    # fsub dword ptr [esi+VARS_C_PRESS_TIME]
-    "D8 1D 1C 97 DC 00 "                    # fcomp dword ptr ds:M07_HOLD
+    "D8 1D 2C 97 DC 00 "                    # fcomp dword ptr ds:M07_HOLD
     "DF E0 "                                # fnstsw ax
     "9E "                                   # sahf
     "72 1D "                                # jb 8f   # held < HOLD
@@ -2114,7 +2126,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "FF B6 B8 10 00 00 "                    # push dword ptr [esi+VARS_PAD_ID]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 86 48 95 FF "                       # call FN_IS_DOWN
+    "E8 76 48 95 FF "                       # call FN_IS_DOWN
     "83 C4 10 "                             # add esp, 16
     "58 "                                   # pop eax
     "85 C0 "                                # test eax, eax
@@ -2130,19 +2142,19 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "50 "                                   # push eax
     "68 80 00 00 00 "                       # push 0x80
     "53 "                                   # push ebx
-    "E8 4C 5E 6D FF "                       # call FN_CONTACT_NORMAL
+    "E8 3C 5E 6D FF "                       # call FN_CONTACT_NORMAL
     "83 C4 14 "                             # add esp, 20
     "85 C0 "                                # test eax, eax
     "74 20 "                                # jz 9f
     "68 80 00 00 00 "                       # push 0x80
     "53 "                                   # push ebx
-    "E8 DA 64 6D FF "                       # call FN_SURFACE_FLAGS
+    "E8 CA 64 6D FF "                       # call FN_SURFACE_FLAGS
     "59 "                                   # pop ecx
     "59 "                                   # pop ecx
     "A9 00 00 03 00 "                       # test eax, SURFACE_NO_RUN_MASK
     "75 0A "                                # jnz 8f
     "57 "                                   # push edi
-    "E8 1B 2A 6B FF "                       # call FN_FLATTEN_NORMALIZE
+    "E8 0B 2A 6B FF "                       # call FN_FLATTEN_NORMALIZE
     "59 "                                   # pop ecx
     "85 E4 "                                # test esp, esp   # ZF=0
     "C3 "                                   # ret
@@ -2189,7 +2201,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "8D 47 18 "                             # lea eax, [edi+M07_SF_TMP]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 4F 66 6C FF "                       # call FN_SET_FACING
+    "E8 3F 66 6C FF "                       # call FN_SET_FACING
     "83 C4 0C "                             # add esp, 12
     "C3 "                                   # ret
     # +0x204 (fall start height) = current z (M07_SF_POS = position), +0x4CC (falling) = 1
@@ -2197,7 +2209,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "8D 47 24 "                             # lea eax, [edi+M07_SF_POS]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 81 50 6C FF "                       # call FN_GET_POSITION
+    "E8 71 50 6C FF "                       # call FN_GET_POSITION
     "59 "                                   # pop ecx
     "59 "                                   # pop ecx
     "8B 47 2C "                             # mov eax, [edi+M07_SF_POS+8]
@@ -2223,7 +2235,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "50 "                                   # push eax
     "8D 47 18 "                             # lea eax, [edi+M07_SF_TMP]
     "50 "                                   # push eax
-    "E8 33 44 6B FF "                       # call FN_ROTATE
+    "E8 23 44 6B FF "                       # call FN_ROTATE
     "83 C4 10 "                             # add esp, 16
     "D9 47 3C "                             # fld dword ptr [edi+M07_SF_STICK]
     "D8 4F 0C "                             # fmul dword ptr [edi+M07_SF_TANGENT]
@@ -2240,7 +2252,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "8B 47 48 "                             # mov eax, [edi+M07_SF_NOW]
     "3B 45 0C "                             # cmp eax, [ebp+S_CONTACT]
     "75 22 "                                # jne .Labs_lat
-    "E8 7D F9 FF FF "                       # call m07_sway_stick
+    "E8 77 F9 FF FF "                       # call m07_sway_stick
     "75 1B "                                # jnz .Labs_lat
     "E8 AD FF FF FF "                       # call .Lstick_side
     "72 14 "                                # jb .Labs_lat
@@ -2269,8 +2281,8 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     # m07_anims_ok:
     "BA F4 FF FF FF "                       # mov edx, -12
     # 1:
-    "8B 82 18 97 DC 00 "                    # mov eax, [M07_ANIM_SLIDE+12+edx]
-    "E8 6F F9 FF FF "                       # call m07_has_anim   # keeps edx
+    "8B 82 28 97 DC 00 "                    # mov eax, [M07_ANIM_SLIDE+12+edx]
+    "E8 69 F9 FF FF "                       # call m07_has_anim   # keeps edx
     "74 05 "                                # jz 9f
     "83 C2 04 "                             # add edx, 4
     "7E EE "                                # jle 1b   # leaves with ZF=0 (edx = 4)
@@ -2307,7 +2319,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "DE C1 "                                # faddp st(1), st   # h + e
     "D9 E0 "                                # fchs
     "D9 EE "                                # fldz   # k = 0: x, y = +0 (v = M07_V0, M07_ACC: positive)
-    "BA 90 96 DC 00 "                       # mov edx, offset M07_V0
+    "BA A0 96 DC 00 "                       # mov edx, offset M07_V0
     # st0 = k, st1 = z (both popped), edx = &v: ray from M07_SF_RAY_FROM along (k*v.x, k*v.y, z);
     # eax = hit, ZF=1 if none. Clobbers ecx, edx. Also used by checks.s (gate frame).
     # m07_ray_k:
@@ -2327,7 +2339,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "8D 47 30 "                             # lea eax, [edi+M07_SF_RAY_FROM]
     "50 "                                   # push eax
     "53 "                                   # push ebx
-    "E8 05 83 6D FF "                       # call FN_RAY
+    "E8 F5 82 6D FF "                       # call FN_RAY
     "83 C4 1C "                             # add esp, 28
     "85 C0 "                                # test eax, eax
     "C3 "                                   # ret
@@ -2352,7 +2364,7 @@ M07_SLIDE = bytes.fromhex(  # .m07_slide at 0xDC9730, source m07_wall_slide/slid
     "C3 "                                   # ret
 )
 
-M07_ANIM_KEEP = bytes.fromhex(  # .m07_anim_keep at 0xDC9DA0, source m07_wall_slide/anim_keep.s
+M07_ANIM_KEEP = bytes.fromhex(  # .m07_anim_keep at 0xDC9DB0, source m07_wall_slide/anim_keep.s
     # ---- m07_keep: hook at the start of the "remove animation set" function 0x497F20(dst, src).
     # For the Prince, the curtain animations (M07_KEEP_FIRST, M07_KEEP_COUNT of them, both arrays of the
     # table;
@@ -2369,7 +2381,7 @@ M07_ANIM_KEEP = bytes.fromhex(  # .m07_anim_keep at 0xDC9DA0, source m07_wall_sl
     "74 08 "                                # je 1f
     # m07_keep_vanilla:
     "8B 48 14 "                             # mov ecx, [eax+0x14]
-    "E9 73 E1 6C FF "                       # jmp ANIM_REMOVE_SET_BODY
+    "E9 63 E1 6C FF "                       # jmp ANIM_REMOVE_SET_BODY
     # 1:
     "60 "                                   # pushad
     "89 E5 "                                # mov ebp, esp   # the pairs go below it; dst at [ebp+0x24], src
@@ -2378,19 +2390,19 @@ M07_ANIM_KEEP = bytes.fromhex(  # .m07_anim_keep at 0xDC9DA0, source m07_wall_sl
     "8B 36 "                                # mov esi, [esi]
     "8B 76 30 "                             # mov esi, [esi+0x30]   # table: word count, +4 second array (or
                                             #   0), +8 first array
-    "8B 3D 24 97 DC 00 "                    # mov edi, dword ptr ds:M07_KEEP_FIRST
-    "8B 1D 28 97 DC 00 "                    # mov ebx, dword ptr ds:M07_KEEP_COUNT
+    "8B 3D 34 97 DC 00 "                    # mov edi, dword ptr ds:M07_KEEP_FIRST
+    "8B 1D 38 97 DC 00 "                    # mov ebx, dword ptr ds:M07_KEEP_COUNT
     # .Lkeep_id:
     "66 3B 3E "                             # cmp di, [esi]   # (ids are below 0x10000)
     "73 28 "                                # jae .Lkeep_call   # this id and the ones after it are beyond the
                                             #   table
     "8D 44 BE 08 "                          # lea eax, [esi+edi*4+8]
-    "8B 08 E3 07 50 51 E8 11 DB 6C FF "     # KEEP_SLOT
+    "8B 08 E3 07 50 51 E8 01 DB 6C FF "     # KEEP_SLOT
     "8B 46 04 "                             # mov eax, [esi+4]
     "85 C0 "                                # test eax, eax
     "74 0E "                                # jz 2f
     "8D 04 B8 "                             # lea eax, [eax+edi*4]
-    "8B 08 E3 07 50 51 E8 FC DA 6C FF "     # KEEP_SLOT
+    "8B 08 E3 07 50 51 E8 EC DA 6C FF "     # KEEP_SLOT
     # 2:
     "47 "                                   # inc edi
     "4B "                                   # dec ebx
@@ -2417,13 +2429,42 @@ M07_ANIM_KEEP = bytes.fromhex(  # .m07_anim_keep at 0xDC9DA0, source m07_wall_sl
     "89 E0 "                                # mov eax, esp
     "6A 00 "                                # push 0
     "50 "                                   # push eax
-    "E8 63 DB 6C FF "                       # call FN_ANIM_RELEASE
+    "E8 53 DB 6C FF "                       # call FN_ANIM_RELEASE
     "83 C4 0C "                             # add esp, 12
     "EB E4 "                                # jmp .Lkeep_restore
     # m07_log_keepdone:
     "61 "                                   # popad
     "C3 "                                   # ret
     # m07_slide_end:
+)
+
+M07_KIT_PRELOAD = bytes.fromhex(  # .m07_kit_preload at 0xDC9E34, source m07_wall_slide/kit_preload.s
+    # hook 7, jmp from 0x764803: esi = the area's load list {count, keys*}, ebp = the world manager;
+    # eax, ecx, edx are free (the two replaced instructions load eax and edx, ecx is loaded after them)
+    # m07_kit_preload:
+    "8B 0E "                                # mov ecx, [esi]   # count (vanilla's loop treats it as signed)
+    "8B 56 04 "                             # mov edx, [esi+4]
+    # 1:
+    "49 "                                   # dec ecx
+    "78 25 "                                # js 9f   # the Walling kit world is not listed: not a Prince area
+    "81 3C 8A CC 09 00 3D "                 # cmp dword ptr [edx+ecx*4], WORLD_KIT_WALLING
+    "75 F4 "                                # jne 1b
+    # m07_log_kitpre:
+    "68 D8 09 00 3D "                       # push WORLD_KIT_WALLFLAG   # [esp] = the key
+    "89 E0 "                                # mov eax, esp
+    "83 EC 08 "                             # sub esp, 8   # the insert's result (node, inserted)
+    "89 E2 "                                # mov edx, esp
+    "50 "                                   # push eax   # &key
+    "52 "                                   # push edx   # &result
+    "8B 8D 24 40 00 00 "                    # mov ecx, [ebp+WM_WANTED]   # this = the set of worlds the area
+                                            #   wants
+    "E8 52 A3 99 FF "                       # call FN_SET_INSERT   # thiscall, ret 8; keeps ebx, esi, edi, ebp
+                                            #   (vanilla's loop relies on it)
+    "83 C4 0C "                             # add esp, 12
+    # 9:
+    "8B 16 "                                # mov edx, [esi]   # the two instructions the hook replaced
+    "8B 46 04 "                             # mov eax, [esi+4]
+    "E9 9D A9 99 FF "                       # jmp KIT_LIST_RET
 )
 
 # The mods' code and data, then their hooks, in the order they are applied
@@ -2522,45 +2563,50 @@ WALLSLIDE_PATCHES = [
     # ---- M07 Wall slide (option "slide") ----
     # .m07_tunables at 0xDC9000
     (MODS_RAW, b"\xCC" * len(M07_TUNABLES), M07_TUNABLES),
-    # .m07_search at 0xDC90BC
-    (0x5470BC, b"\xCC" * len(M07_SEARCH), M07_SEARCH),
-    # .m07_checks at 0xDC9116
-    (0x547116, b"\xCC" * len(M07_CHECKS), M07_CHECKS),
-    # .m07_watchdog at 0xDC929F
-    (0x54729F, b"\xCC" * len(M07_WATCHDOG), M07_WATCHDOG),
-    # .m07_c_gate at 0xDC93F2
-    (0x5473F2, b"\xCC" * len(M07_C_GATE), M07_C_GATE),
-    # .m07_run_cut at 0xDC9428
-    (0x547428, b"\xCC" * len(M07_RUN_CUT), M07_RUN_CUT),
-    # .m07_entry_anims at 0xDC948A
-    (0x54748A, b"\xCC" * len(M07_ENTRY_ANIMS), M07_ENTRY_ANIMS),
-    # .m07_anim_table at 0xDC9672
-    (0x547672, b"\xCC" * len(M07_ANIM_TABLE), M07_ANIM_TABLE),
-    # .m07_slide_tunables at 0xDC9690
-    (0x547690, b"\xCC" * len(M07_SLIDE_TUNABLES), M07_SLIDE_TUNABLES),
-    # .m07_slide at 0xDC9730
-    (0x547730, b"\xCC" * len(M07_SLIDE), M07_SLIDE),
-    # .m07_anim_keep at 0xDC9DA0
-    (0x547DA0, b"\xCC" * len(M07_ANIM_KEEP), M07_ANIM_KEEP),
+    # .m07_search at 0xDC90C0
+    (0x5470C0, b"\xCC" * len(M07_SEARCH), M07_SEARCH),
+    # .m07_checks at 0xDC911A
+    (0x54711A, b"\xCC" * len(M07_CHECKS), M07_CHECKS),
+    # .m07_watchdog at 0xDC92A3
+    (0x5472A3, b"\xCC" * len(M07_WATCHDOG), M07_WATCHDOG),
+    # .m07_c_gate at 0xDC93F6
+    (0x5473F6, b"\xCC" * len(M07_C_GATE), M07_C_GATE),
+    # .m07_run_cut at 0xDC942C
+    (0x54742C, b"\xCC" * len(M07_RUN_CUT), M07_RUN_CUT),
+    # .m07_entry_anims at 0xDC9494
+    (0x547494, b"\xCC" * len(M07_ENTRY_ANIMS), M07_ENTRY_ANIMS),
+    # .m07_anim_table at 0xDC967C
+    (0x54767C, b"\xCC" * len(M07_ANIM_TABLE), M07_ANIM_TABLE),
+    # .m07_slide_tunables at 0xDC96A0
+    (0x5476A0, b"\xCC" * len(M07_SLIDE_TUNABLES), M07_SLIDE_TUNABLES),
+    # .m07_slide at 0xDC9740
+    (0x547740, b"\xCC" * len(M07_SLIDE), M07_SLIDE),
+    # .m07_anim_keep at 0xDC9DB0
+    (0x547DB0, b"\xCC" * len(M07_ANIM_KEEP), M07_ANIM_KEEP),
+    # .m07_kit_preload at 0xDC9E34
+    (0x547E34, b"\xCC" * len(M07_KIT_PRELOAD), M07_KIT_PRELOAD),
     # M02 m02_contact pushad / sub esp,0x2C / mov ebx,esp -> jmp m07_contact ; nop (the cave replays
     # the three instructions when the slide does not apply)
-    (0x4BA13B, bytes.fromhex("60 83 EC 2C 89 E3"), bytes.fromhex("E9 FA F5 50 00 90")),
+    (0x4BA13B, bytes.fromhex("60 83 EC 2C 89 E3"), bytes.fromhex("E9 0A F6 50 00 90")),
     # remove animation set 0x497F20: mov eax,[esp+4] / mov ecx,[eax+0x14] -> jmp m07_keep ; nop ;
     # nop (the cave replays the two instructions)
-    (0x97F20, bytes.fromhex("8B 44 24 04 8B 48 14"), bytes.fromhex("E9 7B 1E 93 00 90 90")),
+    (0x97F20, bytes.fromhex("8B 44 24 04 8B 48 14"), bytes.fromhex("E9 8B 1E 93 00 90 90")),
     # PE header, .data VirtualSize 0x4AED00 -> 0x4AEE00 (maps the slide state at 0xDBFD00..,
     # zero-filled, inside the section's last page)
     (0x1D0, bytes.fromhex("00 ED 4A 00"), bytes.fromhex("00 EE 4A 00")),
     # hook 1: M02 m02_no_contact_je ("no wall contact" je 0x64D797) -> je m07_search
-    (0x4BA135, bytes.fromhex("0F 84 5C 36 D9 FF"), bytes.fromhex("0F 84 FF F5 50 00")),
+    (0x4BA135, bytes.fromhex("0F 84 5C 36 D9 FF"), bytes.fromhex("0F 84 0F F6 50 00")),
     # hook 2: 0x64CD81 mov eax,[0xD34A48] (before the ledge probe 0x546850) -> jmp m07_ledge_gate
-    (0x24CD81, bytes.fromhex("A1 48 4A D3 00"), bytes.fromhex("E9 36 C3 77 00")),
+    (0x24CD81, bytes.fromhex("A1 48 4A D3 00"), bytes.fromhex("E9 3A C3 77 00")),
     # hook 4: 0x630160 sub esp,0xe4 (per-frame airborne handler) -> jmp m07_watchdog ; nop
-    (0x230160, bytes.fromhex("81 EC E4 00 00 00"), bytes.fromhex("E9 3A 91 79 00 90")),
+    (0x230160, bytes.fromhex("81 EC E4 00 00 00"), bytes.fromhex("E9 3E 91 79 00 90")),
     # hook 5: 0x725D9A call IsDown 0x71E450 (C held -> secondary-weapon throw) -> call m07_c_gate
-    (0x325D9A, bytes.fromhex("E8 B1 86 FF FF"), bytes.fromhex("E8 53 36 6A 00")),
+    (0x325D9A, bytes.fromhex("E8 B1 86 FF FF"), bytes.fromhex("E8 57 36 6A 00")),
     # hook 6: 0x590FED run-continues branch -> je m07_run_cut (C during a horizontal run)
-    (0x190FED, bytes.fromhex("0F 84 06 18 00 00"), bytes.fromhex("0F 84 35 84 83 00")),
+    (0x190FED, bytes.fromhex("0F 84 06 18 00 00"), bytes.fromhex("0F 84 39 84 83 00")),
+    # hook 7: 0x764803 mov edx,[esi] / mov eax,[esi+4] (world sets 0x7646D0, after the area's keys)
+    # -> jmp m07_kit_preload (the cave replays both)
+    (0x364803, bytes.fromhex("8B 16 8B 46 04"), bytes.fromhex("E9 2C 56 66 00")),
 ]
 # END GENERATED mods
 

@@ -63,7 +63,7 @@ wall, for example around a corner.
 Press the Special Jump key together with the primary attack (**V + Left click**) to launch the 
 torpedo attack along the same diagonal instead, with or without an enemy nearby.
 
-### Wall slide (optional) Work in Progress
+### Wall slide (optional)
 
 <p align="center">
   <img src="media/wall-slide.gif" width="560" alt="The Prince sliding down a wall like on a curtain">
@@ -71,14 +71,10 @@ torpedo attack along the same diagonal instead, with or without an enemy nearby.
 
 Hold the drop button (**C**) in the air against a wall to slide down it, like on a curtain.
 Steer left and right while sliding, jump off with **Space** (straight out) or **Space + 
-direction** (45 degrees to that side), or release **C** to let go. The patcher asks whether to
+direction** (45 degrees to that side), release **C** to let go. The patcher asks whether to
 include it.
 
-Sliding down walls can be done via hitting a wall mid-air, dropping from a ledge, or after a wallrun.
-
-> [!NOTE]
-> The slide uses the curtain animations, which the game only loads in the first area with a curtain.
-> Before that area the slide doesn't work; from there on it does.
+Sliding down walls can be done via hitting a wall mid-air, dropping from a ledge, or while horizontal wallrunning.
 
 ### Story-trigger fix
 
@@ -111,9 +107,9 @@ it, and verifies the sha256 of the result:
 
 | Version | sha256 |
 |---|---|
-| Vertical wall runs and wall slide (default) | `6680492e745bf20e7a21c87fdfb24a141aa7373bb8f664f6d0760e3bbde79e1a` |
+| Vertical wall runs and wall slide (default) | `fb328f9437c38ba1c16bae00c390a0f2049f6784930a9f1351e3ced572393fc5` |
 | Vertical wall runs, no wall slide | `89815876a23200f8c3a47a752dae98d4778c2f075b09f1f7ffae740769b32c0b` |
-| Horizontal wall runs only, wall slide | `0c95b5b7a7b2a7e406695123ec0b34c70db683e17cbf88599ed7234f1c50e258` |
+| Horizontal wall runs only, wall slide | `6837a1cbe0b524076ebca2efd6aea8970a9c30a6ee4d56b7764eb4e29835a2b2` |
 | Horizontal wall runs only, no wall slide | `ab030994cc2862e6bcd3cf4425b392e63349abcb6aa7a81943ad1b958635feeb` |
 
 If you previously applied an older version of these mods, restore the original exe first (from your
